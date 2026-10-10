@@ -229,7 +229,7 @@
 
         <div class="consent-box" style="margin-top:1rem;">
           <input type="checkbox" id="fconsent" />
-          <label for="fconsent">I consent to share my blood group and area name with hospitals for emergency matching. My exact address will never be shared.</label>
+          <label for="fconsent">I consent to hospitals seeing my blood group, first name and approximate area (about 1 km) for emergency matching. My phone number is shared only with the hospital whose request I choose to accept. My exact address is never shared.</label>
         </div>
 
         <div class="form-nav">
@@ -388,15 +388,29 @@
       }
     }
 
-    function autoLocate() {
+    let donorCoords = null;
+    async function autoLocate() {
       const btn = document.querySelector('.locate-btn');
+      if (!navigator.geolocation) { toast('Geolocation is not supported by this browser', 'error'); return; }
       btn.textContent = '⏳ Locating...';
-      setTimeout(() => {
-        document.getElementById('floc').value = 'Lashkar, Gwalior';
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        donorCoords = { latitude: +pos.coords.latitude.toFixed(6), longitude: +pos.coords.longitude.toFixed(6) };
+        let place = '';
+        try {
+          const r = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&lat=' + donorCoords.latitude + '&lon=' + donorCoords.longitude, { headers: { 'Accept': 'application/json' } });
+          const j = await r.json();
+          const a = j.address || {};
+          place = [a.suburb || a.neighbourhood || a.village || a.town, a.city || a.county || a.state_district].filter(Boolean).join(', ');
+        } catch (_) { /* offline geocoder: fall back to coordinates */ }
+        const input = document.getElementById('floc');
+        if (!input.value.trim()) input.value = place || (donorCoords.latitude + ', ' + donorCoords.longitude);
         btn.textContent = '📍 Located!';
         setTimeout(() => { btn.textContent = '📍 Detect'; }, 2000);
-        toast('Location detected: Lashkar, Gwalior');
-      }, 1500);
+        toast('Location captured' + (place ? ': ' + place : ''));
+      }, (err) => {
+        btn.textContent = '📍 Detect';
+        toast(err.code === 1 ? 'Location permission denied' : 'Could not get your location', 'error');
+      }, { enableHighAccuracy: true, timeout: 15000 });
     }
 
     function submitRegistration() {
@@ -413,7 +427,8 @@
         medical_notes: (document.getElementById('fmedical').value || '').trim() || null,
         aadhaar_last4: (document.getElementById('faad').value || '').trim(),
         emergency_phone: Auth.normalizePhone(document.getElementById('femerg').value),
-        consent_share: !!document.getElementById('fconsent').checked
+        consent_share: !!document.getElementById('fconsent').checked,
+        ...(donorCoords || {})
       };
       sessionStorage.setItem('bc_pending_role', 'donor');
       sessionStorage.setItem('bc_pending_phone', Auth.normalizePhone(document.getElementById('fphone').value));

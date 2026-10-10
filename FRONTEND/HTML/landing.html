@@ -78,22 +78,18 @@
         </div>
         <div class="hero-stats" data-reveal data-reveal-delay="1">
           <div class="hstat">
-            <span class="hstat-val" data-count="50000">0</span>
-            <span class="hstat-suffix">+</span>
-            <span class="hstat-label">Verified Donors</span>
+            <span class="hstat-val" id="statDonors" data-count="0">0</span>
+            <span class="hstat-label">Registered Donors</span>
           </div>
           <div class="hstat-divider"></div>
           <div class="hstat">
-            <span class="hstat-val" data-count="1200">0</span>
-            <span class="hstat-suffix">+</span>
-            <span class="hstat-label">Partner</span>
+            <span class="hstat-val" id="statHospitals" data-count="0">0</span>
             <span class="hstat-label">Hospitals / Blood Banks</span>
-           
           </div>
           <div class="hstat-divider"></div>
           <div class="hstat">
-            <span class="hstat-val" data-count="42">0</span>
-            <span class="hstat-suffix">Seconds</span>
+            <span class="hstat-val" id="statMatch" data-count="0">—</span>
+            <span class="hstat-suffix" id="statMatchUnit"></span>
             <span class="hstat-label">Avg Match Time</span>
           </div>
         </div>
@@ -111,6 +107,7 @@
     </div>
   </footer>
 
+  <script src="../JS/auth.js"></script>
   <script src="../JS/shared-theme.js"></script>
   <script src="../JS/landing.js"></script>
 </body>

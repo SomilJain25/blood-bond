@@ -9,6 +9,8 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, Uuid
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from sqlalchemy import Float
+
 from app.database import Base
 
 if TYPE_CHECKING:
@@ -61,6 +63,8 @@ class BloodRequest(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

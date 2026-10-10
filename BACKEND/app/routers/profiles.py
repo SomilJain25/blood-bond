@@ -1,5 +1,3 @@
-from datetime import date
-
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -29,16 +27,6 @@ def upsert_donor_profile(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    if body.last_donation_date is not None:
-        days_since_last = (date.today() - body.last_donation_date).days
-        if days_since_last < 56:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Donor is not eligible yet, "
-                    f"{56 - days_since_last} day(s) remaining"
-                ),
-            )
     if user.role != UserRole.donor:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -97,6 +85,11 @@ def update_availability(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Create donor profile before updating availability",
+        )
+    if row.suspended:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is suspended. Please contact an administrator.",
         )
     row.is_available = bool(body.is_available)
     db.commit()

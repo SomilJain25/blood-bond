@@ -7,12 +7,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../CSS/shared.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
 
   
 
   <style>
     body { overflow: hidden; }
-    .map-page { display: grid; grid-template-columns: 320px 1fr; height: calc(100vh - var(--nav-h)); padding-top: var(--nav-h); }
+    .map-page { display: grid; grid-template-columns: 320px 1fr; height: 100vh; padding-top: var(--nav-h); }
 
     .map-sidebar {
       background: var(--ink-2); border-right: 1px solid var(--border);
@@ -104,7 +105,17 @@
     }
 
     
-    .map-overlay { position: absolute; inset: 0; }
+    #leafletMap { position: absolute; inset: 0; z-index: 1; background: var(--ink-3); }
+    .map-overlay { position: absolute; inset: 0; z-index: 1000; pointer-events: none; }
+    .map-overlay .map-topbar, .map-overlay .legend { pointer-events: auto; }
+    .bb-pin { display:flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:50%;
+      font-size:1rem; border:2px solid var(--red-bright); background: var(--red); box-shadow: 0 0 14px rgba(200,16,46,0.55); color:#fff; }
+    .bb-req { font-size:0.7rem; font-weight:700; font-family: var(--font-mono); background: var(--red-bright); }
+    .bb-pop { font-family: var(--font-sans, inherit); min-width: 150px; }
+    .bb-pop b { display:block; margin-bottom:2px; }
+    .bb-pop small { display:block; color:#667; margin-bottom:6px; }
+    .bb-pop a { font-size:0.75rem; }
+    .map-empty { padding: 0 1.25rem; font-size: 0.8rem; color: var(--text-muted); }
 
     
     .map-marker {
@@ -205,7 +216,7 @@
     <div class="map-sidebar">
       <div class="ms-head">
         <div class="ms-title">BloodBond — donors near you</div>
-        <div class="ms-sub" id="donorCount">23 donors within 10 km · 18 available</div>
+        <div class="ms-sub" id="donorCount">Loading donors…</div>
       </div>
 
       <div class="ms-filter" role="toolbar" aria-label="Filter donors on map">
@@ -216,10 +227,10 @@
       </div>
 
       
-      <div style="margin: 0 1.25rem 1rem; padding: 10px 12px; background: rgba(200,16,46,0.06); border: 1px solid var(--border-red); border-radius: var(--radius-sm);">
+      <div id="activeReqBox" style="display:none;margin: 0 1.25rem 1rem; padding: 10px 12px; background: rgba(200,16,46,0.06); border: 1px solid var(--border-red); border-radius: var(--radius-sm);">
         <div style="font-size:0.72rem;color:var(--red-bright);font-family:var(--font-mono);font-weight:600;margin-bottom:3px;">🚨 ACTIVE REQUEST</div>
-        <div style="font-size:0.82rem;color:var(--text);">O− · 2 units · Kamla Raja</div>
-        <div style="font-size:0.72rem;color:var(--text-muted);">Matching radius: 5 km</div>
+        <div id="arTitle" style="font-size:0.82rem;color:var(--text);"></div>
+        <div id="arMeta" style="font-size:0.72rem;color:var(--text-muted);"></div>
       </div>
 
       <div class="section-divider"><span>Available donors</span></div>
@@ -229,54 +240,14 @@
 
     
     <div class="map-container">
-      <div class="fake-map"></div>
+      <div id="leafletMap" role="application" aria-label="Map of donors, hospitals and active requests"></div>
       <div class="map-overlay">
 
         
         <div class="map-topbar">
-          <input class="map-search" type="search" placeholder="Search area or blood group…" aria-label="Search donors by area or blood group" />
-          <div class="map-badge"><span class="status-dot online"></span> Live · 23 donors</div>
-          <div class="map-badge">📍 Gwalior City</div>
-        </div>
-
-        
-        <button type="button" class="map-marker marker-hospital" style="left:48%;top:48%;" onclick="showPopup('Kamla Raja Hospital', 'Request active', 'Hospital', 0)" aria-label="Hospital: Kamla Raja Hospital, request active">
-          <div class="marker-icon"><span class="marker-icon-inner" aria-hidden="true">🏥</span></div>
-          <div class="marker-label">Kamla Raja Hospital ← YOU</div>
-        </button>
-
-        
-        <div class="radius-circle" style="width:140px;height:140px;left:48%;top:48%;border-color:rgba(200,16,46,0.3);"></div>
-        <div class="radius-circle" style="width:260px;height:260px;left:48%;top:48%;border-color:rgba(200,16,46,0.15);"></div>
-        <div class="radius-circle" style="width:380px;height:380px;left:48%;top:48%;border-color:rgba(200,16,46,0.06);"></div>
-
-       
-        <button type="button" class="map-marker marker-donor" style="left:38%;top:38%;" onclick="showPopup('Rahul S.', 'O+ · 0.8 km · Available', 'Donor', 0.8)" aria-label="Donor Rahul S., O positive, 0.8 km, available">
-          <div class="marker-icon"><span class="marker-icon-inner" style="font-size:0.75rem;font-family:var(--font-mono);color:var(--green);" aria-hidden="true">RS</span></div>
-          <div class="marker-label" style="color:var(--green);">O+ · 0.8 km</div>
-        </button>
-        <button type="button" class="map-marker marker-donor" style="left:55%;top:35%;" onclick="showPopup('Priya K.', 'O− · 1.4 km · Available', 'Donor', 1.4)" aria-label="Donor Priya K., O negative, 1.4 km, available">
-          <div class="marker-icon"><span class="marker-icon-inner" style="font-size:0.75rem;font-family:var(--font-mono);color:var(--green);" aria-hidden="true">PK</span></div>
-          <div class="marker-label" style="color:var(--green);">O− · 1.4 km</div>
-        </button>
-        <button type="button" class="map-marker marker-donor" style="left:60%;top:55%;" onclick="showPopup('Amit V.', 'A+ · 2.1 km · Available', 'Donor', 2.1)" aria-label="Donor Amit V., A positive, 2.1 km, available">
-          <div class="marker-icon"><span class="marker-icon-inner" style="font-size:0.75rem;font-family:var(--font-mono);color:var(--green);" aria-hidden="true">AV</span></div>
-          <div class="marker-label">A+ · 2.1 km</div>
-        </button>
-        <button type="button" class="map-marker marker-donor" style="left:32%;top:60%;" onclick="showPopup('Sunita R.', 'B+ · 3.4 km · Available', 'Donor', 3.4)" aria-label="Donor Sunita R., B positive, 3.4 km, available">
-          <div class="marker-icon"><span class="marker-icon-inner" style="font-size:0.75rem;font-family:var(--font-mono);color:var(--green);" aria-hidden="true">SR</span></div>
-          <div class="marker-label">B+ · 3.4 km</div>
-        </button>
-        <button type="button" class="map-marker marker-donor" style="left:70%;top:42%;" onclick="showPopup('Dev K.', 'AB+ · 4.8 km · Offline', 'Donor', 4.8)" aria-label="Donor Dev K., AB positive, 4.8 km, offline">
-          <div class="marker-icon" style="background:rgba(90,100,114,0.3);border-color:var(--text-muted);box-shadow:none;"><span class="marker-icon-inner" style="font-size:0.75rem;font-family:var(--font-mono);color:var(--text-muted);" aria-hidden="true">DK</span></div>
-          <div class="marker-label">AB+ · 4.8 km · Offline</div>
-        </button>
-
-        
-        <div class="donor-popup" id="popup" style="left:48%;top:30%;">
-          <div id="popupName" style="font-weight:700;color:var(--text);margin-bottom:4px;"></div>
-          <div id="popupMeta" style="font-size:0.78rem;color:var(--text-muted);margin-bottom:10px;"></div>
-          <a id="mapsLink" href="#" target="_blank" class="btn btn-primary btn-sm" style="font-size:0.75rem;">🗺 Open in Google Maps</a>
+          <input class="map-search" id="mapSearch" type="search" placeholder="Search area or blood group…" aria-label="Search donors by area or blood group" />
+          <div class="map-badge"><span class="status-dot online"></span> <span id="liveBadge">Live</span></div>
+          <div class="map-badge" id="cityBadge">📍 —</div>
         </div>
 
         
@@ -295,67 +266,172 @@
 
   <div class="toast-container" id="toasts"></div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script src="../JS/auth.js"></script>
   <script>
-    
-    const donors = [
-      { init:'RS', name:'Rahul S.',  blood:'O+', dist:0.8, status:'available', area:'Lashkar' },
-      { init:'PK', name:'Priya K.',  blood:'O−', dist:1.4, status:'available', area:'City Centre' },
-      { init:'AV', name:'Amit V.',   blood:'A+', dist:2.1, status:'available', area:'Morar' },
-      { init:'SR', name:'Sunita R.', blood:'B+', dist:3.4, status:'available', area:'Thatipur' },
-      { init:'MK', name:'Mohit K.',  blood:'AB+',dist:3.9, status:'available', area:'Hazira' },
-      { init:'DK', name:'Dev K.',    blood:'AB+',dist:4.8, status:'offline',   area:'Gwalior Fort' },
-      { init:'NK', name:'Neha K.',   blood:'A−', dist:5.2, status:'available', area:'Padav' },
-      { init:'RG', name:'Raj G.',    blood:'B−', dist:6.1, status:'available', area:'Gola Ka Mandir' },
-    ];
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let map, layer, data = null, activeFilter = 'all', query = '', firstFit = true;
+    const markerFor = new Map();
 
-    const list = document.getElementById('donorList');
-    function renderDonors(filter) {
-      list.innerHTML = '';
-      donors.filter(d => {
-        if (filter === 'available') return d.status === 'available';
-        if (filter === 'critical')  return d.blood === 'O−' || d.blood === 'O+';
-        if (filter === 'nearby')    return d.dist < 2;
+    function pretty(bg) { return String(bg || '').replace('-', '−'); }
+    function gmaps(lat, lng) { return 'https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng; }
+    function popupHtml(title, sub, lat, lng, note) {
+      return '<div class="bb-pop"><b>' + esc(title) + '</b><small>' + esc(sub) + '</small>' +
+        '<a href="' + gmaps(lat, lng) + '" target="_blank" rel="noopener">🗺 Open in Google Maps</a>' +
+        (note ? '<small style="margin-top:6px">' + esc(note) + '</small>' : '') + '</div>';
+    }
+
+    async function initMap() {
+      if (!(await Auth.enforceAnyRole(['hospital', 'admin']))) return;
+      if (typeof L === 'undefined') {
+        document.getElementById('leafletMap').innerHTML = '<p style="padding:1rem;color:var(--text-muted);font-size:0.85rem;">The map could not be loaded (check your internet connection). Everything else still works.</p>';
+        toast('The map library could not be loaded. Check your internet connection.', 'error');
+        return;
+      }
+      const back = document.querySelector('.nav-right .btn-nav-outline');
+      if (back) back.href = Auth.roleHome(Auth.getRole());
+      map = L.map('leafletMap', { zoomControl: false }).setView([22.9734, 78.6569], 5);
+      L.control.zoom({ position: 'bottomleft' }).addTo(map);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+      layer = L.layerGroup().addTo(map);
+      document.getElementById('mapSearch').addEventListener('input', (e) => { query = e.target.value.trim().toLowerCase(); render(); });
+      await refresh();
+      setInterval(refresh, 30000);
+    }
+
+    async function refresh() {
+      try {
+        data = await Auth.apiFetch('/map/data');
+        render();
+      } catch (e) {
+        toast(String(e.message || e), 'error');
+      }
+    }
+
+    function visibleDonors() {
+      return (data.donors || []).filter((d) => {
+        if (activeFilter === 'available' && !d.available) return false;
+        if (activeFilter === 'critical' && d.blood_group !== 'O-') return false;
+        if (activeFilter === 'nearby' && !(d.distance_km != null && d.distance_km < 2)) return false;
+        if (query) {
+          const hay = (d.label + ' ' + d.blood_group + ' ' + (d.area || '')).toLowerCase();
+          if (!hay.includes(query.replace('−', '-'))) return false;
+        }
         return true;
-      }).forEach(d => {
-        list.innerHTML += `
-          <button type="button" class="donor-pin-item" onclick="showPopup('${d.name}','${d.blood} · ${d.dist} km · ${d.status}','Donor',${d.dist})" aria-label="Donor ${d.name}, ${d.blood}, ${d.dist} kilometres, ${d.status}">
-            <div class="pin-dot ${d.status}" aria-hidden="true"></div>
-            <div class="pin-body">
-              <div class="pin-name">${d.name} <span style="font-family:var(--font-mono);font-size:0.7rem;color:var(--red-bright);">${d.blood}</span></div>
-              <div class="pin-meta">${d.area} · ${d.status}</div>
-            </div>
-            <div class="pin-dist">${d.dist} km</div>
-          </button>`;
       });
     }
-    renderDonors('all');
+
+    function render() {
+      if (!data) return;
+      layer.clearLayers();
+      markerFor.clear();
+      const pts = [];
+      const center = data.center ? [data.center.lat, data.center.lng] : null;
+
+      if (center) {
+        L.circle(center, { radius: 5000, color: '#c8102e', weight: 1, fillOpacity: 0.04 }).addTo(layer);
+        L.circle(center, { radius: 10000, color: '#c8102e', weight: 1, dashArray: '6 6', fill: false }).addTo(layer);
+        pts.push(center);
+      }
+
+      (data.hospitals || []).forEach((h) => {
+        const icon = L.divIcon({ className: '', html: '<div class="bb-pin">🏥</div>', iconSize: [34, 34], iconAnchor: [17, 17] });
+        L.marker([h.lat, h.lng], { icon, title: h.name }).addTo(layer)
+          .bindPopup(popupHtml(h.name + (h.is_me ? ' (you)' : ''), [h.type, h.city, h.verified ? 'Verified ✓' : 'Not yet verified'].filter(Boolean).join(' · '), h.lat, h.lng));
+        pts.push([h.lat, h.lng]);
+      });
+
+      (data.requests || []).forEach((r) => {
+        if (r.lat == null || r.lng == null) return;
+        const icon = L.divIcon({ className: '', html: '<div class="bb-pin bb-req">' + esc(pretty(r.blood_group)) + '</div>', iconSize: [34, 34], iconAnchor: [17, 17] });
+        L.marker([r.lat, r.lng], { icon, zIndexOffset: 1000 }).addTo(layer)
+          .bindPopup(popupHtml(pretty(r.blood_group) + ' · ' + r.units + ' unit(s) · ' + r.urgency, (r.hospital_name || '') + ' · ' + r.status, r.lat, r.lng));
+        pts.push([r.lat, r.lng]);
+      });
+
+      const donors = visibleDonors();
+      donors.forEach((d, i) => {
+        const color = d.available ? '#1db954' : '#5a6472';
+        const m = L.circleMarker([d.lat, d.lng], { radius: 9, color, weight: 2, fillColor: color, fillOpacity: d.available ? 0.55 : 0.25 }).addTo(layer);
+        m.bindPopup(popupHtml(d.label + ' · ' + pretty(d.blood_group),
+          (d.available ? 'Available' : 'Unavailable') + (d.distance_km != null ? ' · ≈' + d.distance_km + ' km' : ''),
+          d.lat, d.lng, 'Location is approximate (~1 km) to protect donor privacy.'));
+        markerFor.set(i, m);
+        pts.push([d.lat, d.lng]);
+      });
+
+      renderSidebar(donors);
+      renderHeader(center);
+
+      if (firstFit) {
+        firstFit = false;
+        if (center) map.fitBounds(L.latLng(center[0], center[1]).toBounds(22000), { padding: [20, 20] });
+        else if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 13 });
+      }
+    }
+
+    function renderHeader(center) {
+      const s = data.summary || {};
+      document.getElementById('donorCount').textContent =
+        (s.donors_total || 0) + ' donors on map · ' + (s.donors_available || 0) + ' available' +
+        (center ? ' · ' + (s.donors_within_10km || 0) + ' within 10 km' : '');
+      document.getElementById('liveBadge').textContent = 'Live · ' + (s.donors_total || 0) + ' donors';
+      const me = (data.hospitals || []).find((h) => h.is_me);
+      document.getElementById('cityBadge').textContent = '📍 ' + (me ? (me.city || me.name) : 'All hospitals');
+
+      const box = document.getElementById('activeReqBox');
+      const r = (data.requests || [])[0];
+      if (r) {
+        box.style.display = '';
+        document.getElementById('arTitle').textContent = pretty(r.blood_group) + ' · ' + r.units + ' unit(s) · ' + r.urgency;
+        document.getElementById('arMeta').textContent = 'Status: ' + r.status + (center ? ' · Rings: 5 km / 10 km' : '');
+      } else {
+        box.style.display = 'none';
+      }
+    }
+
+    function renderSidebar(donors) {
+      const list = document.getElementById('donorList');
+      list.innerHTML = '';
+      if (!donors.length) {
+        const msg = (data.donors || []).length
+          ? 'No donors match this filter.'
+          : 'No donors have shared their location yet.';
+        list.innerHTML = '<div class="map-empty">' + msg + '</div>';
+        return;
+      }
+      donors.forEach((d, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'donor-pin-item';
+        b.setAttribute('aria-label', 'Donor ' + d.label + ', ' + d.blood_group + (d.distance_km != null ? ', ' + d.distance_km + ' kilometres' : ''));
+        b.innerHTML =
+          '<div class="pin-dot ' + (d.available ? 'available' : 'offline') + '" aria-hidden="true"></div>' +
+          '<div class="pin-body"><div class="pin-name">' + esc(d.label) +
+          ' <span style="font-family:var(--font-mono);font-size:0.7rem;color:var(--red-bright);">' + esc(pretty(d.blood_group)) + '</span></div>' +
+          '<div class="pin-meta">' + esc(d.area || 'Location shared') + ' · ' + (d.available ? 'available' : 'unavailable') + '</div></div>' +
+          '<div class="pin-dist">' + (d.distance_km != null ? '≈' + d.distance_km + ' km' : '') + '</div>';
+        b.addEventListener('click', () => { const m = markerFor.get(i); map.setView([d.lat, d.lng], 14); if (m) m.openPopup(); });
+        list.appendChild(b);
+      });
+    }
 
     function filterMap(f, el) {
-      document.querySelectorAll('.filter-chip').forEach(c => {
-        c.classList.remove('active');
-        c.setAttribute('aria-pressed', 'false');
-      });
+      activeFilter = f;
+      document.querySelectorAll('.filter-chip').forEach((c) => { c.classList.remove('active'); c.setAttribute('aria-pressed', 'false'); });
       el.classList.add('active');
       el.setAttribute('aria-pressed', 'true');
-      renderDonors(f);
-    }
-
-    
-    function showPopup(name, meta, type, dist) {
-      const p = document.getElementById('popup');
-      document.getElementById('popupName').textContent = (type === 'Donor' ? '👤 ' : '🏥 ') + name;
-      document.getElementById('popupMeta').textContent = meta;
-      const query = encodeURIComponent(name + ' Gwalior');
-      document.getElementById('mapsLink').href = `https://www.google.com/maps/search/?api=1&query=${query}`;
-      p.classList.add('show');
-      p.style.pointerEvents = 'all';
-      setTimeout(() => { p.classList.remove('show'); p.style.pointerEvents = 'none'; }, 4000);
+      render();
     }
 
     function toast(msg, type = 'success') {
       const t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = msg;
       document.getElementById('toasts').appendChild(t); setTimeout(() => t.remove(), 3500);
     }
+
+    initMap();
   </script>
   <script src="../JS/shared-theme.js"></script>
 </body>

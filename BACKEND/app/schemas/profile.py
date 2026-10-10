@@ -20,6 +20,8 @@ class DonorProfileCreate(BaseModel):
     emergency_phone: str = Field(..., max_length=15)
     consent_share: bool = False
     is_available: bool = True
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
 
     @field_validator("blood_group")
     @classmethod
@@ -69,6 +71,8 @@ class HospitalProfileCreate(BaseModel):
     city: str = Field(..., max_length=120)
     area: str | None = Field(None, max_length=200)
     gps_text: str | None = Field(None, max_length=200)
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
     consent: bool = False
 
     @field_validator("facility_name", "contact_person", "address", "city")

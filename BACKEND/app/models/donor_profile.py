@@ -16,6 +16,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from sqlalchemy import Float
+
 from app.database import Base
 
 if TYPE_CHECKING:
@@ -49,6 +51,10 @@ class DonorProfile(Base):
         Boolean, default=False, nullable=False
     )
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    suspended: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

@@ -132,12 +132,21 @@
     
     function autoLocate() {
       const btn = document.querySelector('.locate-btn');
+      if (!navigator.geolocation) { toast('Geolocation is not supported by this browser', 'error'); return; }
       btn.textContent = '⏳ Locating...';
-      setTimeout(() => {
-        document.getElementById('hgps').value = '26.2124° N, 78.1772° E';
-        btn.textContent = '✓ Located';
-        toast('GPS coordinates captured');
-      }, 1500);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude.toFixed(6), lng = pos.coords.longitude.toFixed(6);
+          document.getElementById('hgps').value = lat + ', ' + lng;
+          btn.textContent = '✓ Located';
+          toast('GPS coordinates captured');
+        },
+        (err) => {
+          btn.textContent = '📍 Detect GPS';
+          toast(err.code === 1 ? 'Location permission denied' : 'Could not get your location', 'error');
+        },
+        { enableHighAccuracy: true, timeout: 15000 }
+      );
     }
 
     function submitHospital() {
@@ -167,6 +176,8 @@
         gps_text: (document.getElementById('hgps').value || '').trim() || null,
         consent: !!document.getElementById('hconsent').checked
       };
+      const gps = (payload.gps_text || '').match(/(-?\d{1,3}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+      if (gps) { payload.latitude = parseFloat(gps[1]); payload.longitude = parseFloat(gps[2]); }
       sessionStorage.setItem('bc_pending_role', 'hospital');
       sessionStorage.setItem('bc_pending_phone', phone);
       sessionStorage.setItem('bc_pending_profile', JSON.stringify({ type: 'hospital', payload: payload }));

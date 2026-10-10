@@ -28,7 +28,7 @@ COMPATIBILITY_MATRIX: dict[str, dict[str, float]] = {
 def is_donor_eligible(profile: DonorProfile) -> bool:
     if not profile.consent_share:
         return False
-    if not profile.is_available:
+    if profile.suspended or not profile.is_available:
         return False
     if profile.last_donation_date is None:
         return True

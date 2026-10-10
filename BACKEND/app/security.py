@@ -51,18 +51,25 @@ def _get_or_create_rl(db: Session, *, key_type: OtpKeyType, key: str) -> OtpRate
     return row
 
 
+def _aware(dt: datetime | None) -> datetime | None:
+    """SQLite returns naive datetimes; treat them as UTC so comparisons work."""
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _reset_if_window_expired(now: datetime, started_at: datetime, window_seconds: int) -> bool:
-    return (now - started_at).total_seconds() >= window_seconds
+    return (now - _aware(started_at)).total_seconds() >= window_seconds
 
 
 def enforce_otp_send_allowed(db: Session, *, phone: str, ip: str | None) -> None:
     now = datetime.now(timezone.utc)
 
     phone_rl = _get_or_create_rl(db, key_type=OtpKeyType.phone, key=phone)
-    if phone_rl.locked_until and phone_rl.locked_until > now:
+    if _aware(phone_rl.locked_until) and _aware(phone_rl.locked_until) > now:
         raise ValueError("OTP temporarily locked due to failed attempts. Try later.")
-    if phone_rl.resend_available_at and phone_rl.resend_available_at > now:
-        remaining = int((phone_rl.resend_available_at - now).total_seconds())
+    if _aware(phone_rl.resend_available_at) and _aware(phone_rl.resend_available_at) > now:
+        remaining = int((_aware(phone_rl.resend_available_at) - now).total_seconds())
         raise ValueError(f"Please wait {remaining}s before resending OTP")
 
     if _reset_if_window_expired(now, phone_rl.send_window_started_at, OTP_SEND_WINDOW_SECONDS):
@@ -90,7 +97,7 @@ def register_otp_verify_result(db: Session, *, phone: str, ip: str | None, ok: b
     now = datetime.now(timezone.utc)
     phone_rl = _get_or_create_rl(db, key_type=OtpKeyType.phone, key=phone)
 
-    if phone_rl.locked_until and phone_rl.locked_until > now:
+    if _aware(phone_rl.locked_until) and _aware(phone_rl.locked_until) > now:
         return
 
     if _reset_if_window_expired(now, phone_rl.fail_window_started_at, OTP_FAIL_WINDOW_SECONDS):
@@ -122,13 +129,13 @@ def register_otp_verify_result(db: Session, *, phone: str, ip: str | None, ok: b
 def enforce_otp_verify_allowed(db: Session, *, phone: str, ip: str | None) -> None:
     now = datetime.now(timezone.utc)
     phone_rl = _get_or_create_rl(db, key_type=OtpKeyType.phone, key=phone)
-    if phone_rl.locked_until and phone_rl.locked_until > now:
-        remaining = int((phone_rl.locked_until - now).total_seconds())
+    if _aware(phone_rl.locked_until) and _aware(phone_rl.locked_until) > now:
+        remaining = int((_aware(phone_rl.locked_until) - now).total_seconds())
         raise ValueError(f"Too many failed attempts. Try again in {remaining}s")
     if ip:
         ip_rl = _get_or_create_rl(db, key_type=OtpKeyType.ip, key=ip)
-        if ip_rl.locked_until and ip_rl.locked_until > now:
-            remaining = int((ip_rl.locked_until - now).total_seconds())
+        if _aware(ip_rl.locked_until) and _aware(ip_rl.locked_until) > now:
+            remaining = int((_aware(ip_rl.locked_until) - now).total_seconds())
             raise ValueError(f"Too many failed attempts from this IP. Try again in {remaining}s")
 
 

@@ -4,8 +4,10 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.audit import write_audit_log
 from app.database import get_db
+from app.models.user import UserRole
 from app.schemas.auth import OtpSendRequest, OtpSendResponse, OtpVerifyRequest, TokenResponse
 from app.schemas.user import UserPublic
+from app import sms
 from app.security import (
     create_access_token,
     enforce_otp_send_allowed,
@@ -47,6 +49,11 @@ def send_otp(
         )
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
     code = issue_otp_challenge(db, settings, phone)
+    if sms.is_configured():
+        if not sms.send_otp(phone, code):
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Could not send the SMS right now. Please try again.")
+    elif not settings.demo_mode:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "SMS provider is not configured")
     write_audit_log(
         db,
         actor_user_id=None,
@@ -58,7 +65,7 @@ def send_otp(
         meta={"demo_mode": settings.demo_mode},
     )
     return OtpSendResponse(
-        demo_otp=code,
+        demo_otp=code if settings.demo_mode else None,
     )
 
 
@@ -102,6 +109,17 @@ def verify_otp_route(
             meta={"role": body.role.value},
         )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OTP")
+    if body.role == UserRole.admin and phone not in settings.admin_phone_set:
+        write_audit_log(
+            db,
+            actor_user_id=None,
+            action="otp.verify.admin_denied",
+            target_type="phone",
+            target_id=phone,
+            ip=ip,
+            user_agent=ua,
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access is not enabled for this phone")
     try:
         user = get_or_create_user(db, phone, body.role)
     except ValueError as exc:

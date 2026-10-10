@@ -41,7 +41,7 @@
     .role-title em { font-style: italic; color: var(--red-bright); }
     .role-sub { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 3rem; }
 
-    .role-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+    .role-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem; }
     @media(max-width:700px){ .role-grid { grid-template-columns: 1fr; } }
 
     .role-card {
@@ -159,20 +159,6 @@
           <span class="rc-cta">Register Hospital / Blood Bank →</span>
         </button>
 
-        <button type="button" class="role-card" onclick="selectRole('admin', 'admin.html')" id="card-admin"
-          aria-label="Open BloodBond city operations dashboard">
-          <span class="rc-num">03</span>
-          <div class="rc-icon" aria-hidden="true">⚙️</div>
-          <div class="rc-name">City operations</div>
-          <p class="rc-desc">BloodBond city-wide view: monitor requests, shortage stats, and emergency broadcasts.</p>
-          <div class="rc-features">
-            <span class="rc-feat">Live city request map</span>
-            <span class="rc-feat">Donor heatmap</span>
-            <span class="rc-feat">Blood shortage stats</span>
-            <span class="rc-feat">Emergency broadcast</span>
-          </div>
-          <span class="rc-cta">Open city dashboard →</span>
-        </button>
       </div>
 
       <p class="role-note"><strong>⚠ Role lock:</strong> Role cannot be changed after account creation for security.</p>

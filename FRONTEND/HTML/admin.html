@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../CSS/shared.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
 
   
   <style>
@@ -54,6 +55,19 @@
     .action-btn.verify   { background: rgba(29,185,84,0.12); color: var(--green); }
     .action-btn.suspend  { background: rgba(200,16,46,0.1); color: var(--red-bright); }
     .action-btn.verify:hover  { background: rgba(29,185,84,0.25); }
+    .sect-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 1rem; }
+    .sect-head h3 { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+    .action-btn.neutral { background: rgba(255,255,255,0.06); color: var(--text-dim); }
+    .action-btn.neutral:hover { background: rgba(255,255,255,0.12); }
+    .map-toggle { background: rgba(255,255,255,0.06); color: var(--text-dim); }
+    .map-toggle.on { background: var(--red); color: #fff; }
+    .bb-pin { display:flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:50%; font-size:0.9rem;
+      border:2px solid var(--red-bright); background: var(--red); color:#fff; box-shadow: 0 0 12px rgba(200,16,46,0.5); }
+    .bb-req { font-size:0.68rem; font-weight:700; font-family: var(--font-sans, inherit); letter-spacing:-0.02em; }
+    .bb-pop b { display:block; margin-bottom:2px; } .bb-pop small { display:block; color:#667; }
+    .vbadge { color: var(--green); font-size: 0.72rem; margin-left: 4px; }
+    .legend-row { display:flex; flex-wrap:wrap; gap:14px; margin-top:10px; font-size:0.72rem; color:var(--text-muted); }
+    .legend-row i { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle; }
     .action-btn.suspend:hover { background: rgba(200,16,46,0.2); }
 
    
@@ -98,6 +112,7 @@
           <button type="button" class="sidebar-item active" data-section="overview" onclick="showSection('overview')"><span class="si-icon" aria-hidden="true">📊</span> City Overview</button>
           <button type="button" class="sidebar-item" data-section="requests" onclick="showSection('requests')"><span class="si-icon" aria-hidden="true">🩸</span> Live Requests</button>
           <button type="button" class="sidebar-item" data-section="donors" onclick="showSection('donors')"><span class="si-icon" aria-hidden="true">👥</span> Donor Management</button>
+          <button type="button" class="sidebar-item" data-section="hospitals" onclick="showSection('hospitals')"><span class="si-icon" aria-hidden="true">🏥</span> Hospitals <span id="pendingHosp" class="badge badge-urgent" style="display:none;margin-left:auto;"></span></button>
           <button type="button" class="sidebar-item" data-section="shortage" onclick="showSection('shortage')"><span class="si-icon" aria-hidden="true">📉</span> Shortage Stats</button>
           <button type="button" class="sidebar-item" data-section="broadcast" onclick="showSection('broadcast')"><span class="si-icon" aria-hidden="true">📡</span> Emergency Broadcast</button>
         </div>
@@ -113,66 +128,55 @@
         <div class="stats-row" data-reveal>
           <div class="stat-card">
             <div class="stat-card-label">Total Donors</div>
-            <div class="stat-card-val">50</div>
-            <div class="stat-card-sub">Gwalior City</div>
+            <div class="stat-card-val">—</div>
+            <div class="stat-card-sub" id="subDonors">Registered donors</div>
           </div>
           <div class="stat-card">
             <div class="stat-card-label">Available Now</div>
-            <div class="stat-card-val" style="color:var(--green);">34</div>
+            <div class="stat-card-val" style="color:var(--green);">—</div>
             <div class="stat-card-sub">Online &amp; eligible</div>
           </div>
           <div class="stat-card">
             <div class="stat-card-label">Active Requests</div>
-            <div class="stat-card-val" style="color:var(--red-bright);">7</div>
+            <div class="stat-card-val" style="color:var(--red-bright);">—</div>
             <div class="stat-card-sub">City-wide</div>
           </div>
           <div class="stat-card">
             <div class="stat-card-label">Fulfilled Today</div>
-            <div class="stat-card-val">12</div>
-            <div class="stat-card-sub">94% success rate</div>
+            <div class="stat-card-val">—</div>
+            <div class="stat-card-sub">Completed today</div>
           </div>
         </div>
 
         <div class="dash-section active" id="section-overview">
-          <div class="card" data-reveal data-reveal-delay="1" style="margin-bottom:1.2rem;">
+          <div class="card" style="margin-bottom:1.2rem;">
+            <div class="sect-head">
+              <h3>City Map</h3>
+              <div style="display:flex;gap:6px;">
+                <button type="button" class="action-btn map-toggle on" id="btnMarkers" onclick="setMapMode('markers')" aria-pressed="true">Donors</button>
+                <button type="button" class="action-btn map-toggle" id="btnDensity" onclick="setMapMode('density')" aria-pressed="false">Density</button>
+              </div>
+            </div>
+            <div id="adminMap" style="height:420px;border-radius:var(--radius-sm);overflow:hidden;position:relative;z-index:0;background:var(--ink-3);" role="application" aria-label="City map of donors, hospitals and active requests"></div>
+            <div class="legend-row" id="mapLegend" aria-hidden="true">
+              <span><i style="background:#1db954"></i>Available donor</span>
+              <span><i style="background:#5a6472"></i>Unavailable donor</span>
+              <span><i style="background:#c8102e"></i>Hospital</span>
+              <span><i style="background:#f59e0b"></i>Active request (pin shows blood group)</span>
+              <span id="mapCount" style="margin-left:auto;"></span>
+            </div>
+            <p style="font-size:0.7rem;color:var(--text-muted);margin-top:6px;">Donor positions are rounded to about 1 km. Only donors who shared their location appear.</p>
+          </div>
+          <div class="card" style="margin-bottom:1.2rem;">
             <div class="sect-head"><h3>City at a Glance</h3></div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
               <div>
-                <div style="font-size:0.72rem;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:8px;">REQUESTS TODAY</div>
-                <div class="timeline">
-                  <div class="live-req-row">
-                    <div class="blood-pill" style="width:38px;height:38px;font-size:0.9rem;">O−</div>
-                    <div class="lrr-body"><div class="lrr-title">Kamla Raja · Critical</div><div class="lrr-meta">0.8 km · 2m ago · Matched</div></div>
-                    <span class="badge badge-critical">●</span>
-                  </div>
-                  <div class="live-req-row">
-                    <div class="blood-pill" style="width:38px;height:38px;font-size:0.9rem;">A+</div>
-                    <div class="lrr-body"><div class="lrr-title">City Hospital · Urgent</div><div class="lrr-meta">2.1 km · 15m ago · Alerted</div></div>
-                    <span class="badge badge-urgent">●</span>
-                  </div>
-                  <div class="live-req-row">
-                    <div class="blood-pill" style="width:38px;height:38px;font-size:0.9rem;">B+</div>
-                    <div class="lrr-body"><div class="lrr-title">Apollo Hospital · Normal</div><div class="lrr-meta">3.4 km · 1h ago · Fulfilled</div></div>
-                    <span class="badge badge-success">✓</span>
-                  </div>
-                </div>
+                <div style="font-size:0.72rem;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:8px;">LATEST REQUESTS</div>
+                <div class="timeline" id="glanceReqs"><div class="nearby-empty">Loading…</div></div>
               </div>
               <div>
                 <div style="font-size:0.72rem;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:8px;">DONOR STATUS</div>
-                <div style="display:flex;flex-direction:column;gap:8px;">
-                  <div style="display:flex;align-items:center;gap:10px;">
-                    <div style="flex:1;"><div class="shortage-bar-wrap"><div class="shortage-bar ok" style="width:68%"></div></div></div>
-                    <span style="font-size:0.75rem;color:var(--text-muted);white-space:nowrap;">34 available</span>
-                  </div>
-                  <div style="display:flex;align-items:center;gap:10px;">
-                    <div style="flex:1;"><div class="shortage-bar-wrap"><div class="shortage-bar low" style="width:22%"></div></div></div>
-                    <span style="font-size:0.75rem;color:var(--text-muted);white-space:nowrap;">11 locked</span>
-                  </div>
-                  <div style="display:flex;align-items:center;gap:10px;">
-                    <div style="flex:1;"><div class="shortage-bar-wrap"><div class="shortage-bar" style="width:10%;background:var(--text-muted)"></div></div></div>
-                    <span style="font-size:0.75rem;color:var(--text-muted);white-space:nowrap;">5 offline</span>
-                  </div>
-                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;" id="glanceDonors"></div>
               </div>
             </div>
           </div>
@@ -181,29 +185,15 @@
         <div class="dash-section" id="section-requests">
           <div class="sect-head"><h3>Live City Requests</h3></div>
           <div class="card">
-            <div class="live-req-row">
-              <div class="blood-pill" style="width:40px;height:40px;">O−</div>
-              <div class="lrr-body"><div class="lrr-title">Kamla Raja Hospital · Critical · 2 units</div><div class="lrr-meta">Lashkar · 2m ago · 3 donors alerted</div></div>
-              <span class="badge badge-critical">CRITICAL</span>
-            </div>
-            <div class="live-req-row">
-              <div class="blood-pill" style="width:40px;height:40px;">A+</div>
-              <div class="lrr-body"><div class="lrr-title">City Hospital · Urgent · 1 unit</div><div class="lrr-meta">Morar · 15m ago · 2 donors alerted</div></div>
-              <span class="badge badge-urgent">URGENT</span>
-            </div>
-            <div class="live-req-row">
-              <div class="blood-pill" style="width:40px;height:40px;">AB−</div>
-              <div class="lrr-body"><div class="lrr-title">Apollo Hospital · Critical · 1 unit</div><div class="lrr-meta">Hazira · 30m ago · Expanding radius to 10km</div></div>
-              <span class="badge badge-critical">ESCALATING</span>
-            </div>
+            <div class="nearby-empty">Loading…</div>
           </div>
         </div>
 
         <div class="dash-section" id="section-donors">
-          <div class="sect-head"><h3>Donor Management</h3><span style="font-size:0.78rem;color:var(--text-muted);">50 total · 34 available</span></div>
+          <div class="sect-head"><h3>Donor Management</h3><span style="font-size:0.78rem;color:var(--text-muted);" id="donorSummary"></span></div>
           <div class="search-bar">
-            <input type="text" class="form-control" placeholder="🔍 Search by name or blood group..." oninput="filterDonors(this.value)" />
-            <select class="form-control" onchange="filterBlood(this.value)">
+            <input type="text" class="form-control" id="donorSearch" placeholder="🔍 Search by name, area or blood group..." oninput="applyDonorFilters()" />
+            <select class="form-control" id="donorBlood" onchange="applyDonorFilters()">
               <option value="">All blood groups</option>
               <option>A+</option><option>A−</option><option>B+</option><option>B−</option>
               <option>AB+</option><option>AB−</option><option>O+</option><option>O−</option>
@@ -212,22 +202,24 @@
           <div class="card" style="overflow-x:auto;">
             <table class="dtable" id="donorTable">
               <thead><tr><th>Donor</th><th>Blood</th><th>Area</th><th>Status</th><th>Last Donated</th><th>Actions</th></tr></thead>
-              <tbody id="donorTbody"></tbody>
+              <tbody id="donorTbody"><tr><td colspan="6" style="color:var(--text-muted);padding:16px;">Loading…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="dash-section" id="section-hospitals">
+          <div class="sect-head"><h3>Hospitals &amp; Blood Banks</h3><span style="font-size:0.78rem;color:var(--text-muted);" id="hospSummary"></span></div>
+          <div class="card" style="overflow-x:auto;">
+            <table class="dtable">
+              <thead><tr><th>Facility</th><th>Type</th><th>City</th><th>Contact</th><th>Phone</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="hospTbody"><tr><td colspan="7" style="color:var(--text-muted);padding:16px;">Loading…</td></tr></tbody>
             </table>
           </div>
         </div>
 
         <div class="dash-section" id="section-shortage">
-          <div class="sect-head"><h3>Blood Group Shortage</h3><span style="font-size:0.75rem;color:var(--text-muted);">Live · Gwalior City</span></div>
+          <div class="sect-head"><h3>Blood Group Shortage</h3><span style="font-size:0.75rem;color:var(--text-muted);">Live · eligible donors only</span></div>
           <div class="shortage-grid" data-reveal>
-            <div class="shortage-card"><div class="shortage-blood">A+</div><div class="shortage-bar-wrap"><div class="shortage-bar ok" style="width:72%"></div></div><div class="shortage-count">8 donors available</div></div>
-            <div class="shortage-card"><div class="shortage-blood">A−</div><div class="shortage-bar-wrap"><div class="shortage-bar low" style="width:30%"></div></div><div class="shortage-count">3 donors available</div></div>
-            <div class="shortage-card"><div class="shortage-blood">B+</div><div class="shortage-bar-wrap"><div class="shortage-bar ok" style="width:80%"></div></div><div class="shortage-count">9 donors available</div></div>
-            <div class="shortage-card"><div class="shortage-blood">B−</div><div class="shortage-bar-wrap"><div class="shortage-bar critical" style="width:15%"></div></div><div class="shortage-count">⚠ Only 1 available</div></div>
-            <div class="shortage-card"><div class="shortage-blood">AB+</div><div class="shortage-bar-wrap"><div class="shortage-bar ok" style="width:60%"></div></div><div class="shortage-count">5 donors available</div></div>
-            <div class="shortage-card"><div class="shortage-blood">AB−</div><div class="shortage-bar-wrap"><div class="shortage-bar critical" style="width:10%"></div></div><div class="shortage-count">⚠ Only 1 available</div></div>
-            <div class="shortage-card"><div class="shortage-blood">O+</div><div class="shortage-bar-wrap"><div class="shortage-bar ok" style="width:90%"></div></div><div class="shortage-count">12 donors available</div></div>
-            <div class="shortage-card"><div class="shortage-blood">O−</div><div class="shortage-bar-wrap"><div class="shortage-bar low" style="width:25%"></div></div><div class="shortage-count">⚠ Only 2 available</div></div>
           </div>
         </div>
 
@@ -235,21 +227,16 @@
           <div class="sect-head"><h3>Emergency Broadcast</h3></div>
           <div class="broadcast-card">
             <h3>📡 Broadcast to All City Donors</h3>
-            <p>Send an emergency SMS to all available donors in Gwalior simultaneously. Use only for mass emergencies.</p>
-            <textarea class="broadcast-input" rows="3" id="broadcastMsg" placeholder="🚨 URGENT: Critical shortage of O− blood across Gwalior hospitals. All O− donors — please report immediately. Call 0751-XXXXXX or open BloodBond app."></textarea>
+            <p>Send one emergency SMS to every eligible donor in the chosen group. Only donors who are online, consenting and not in the 56-day lock are included.</p>
+            <textarea class="broadcast-input" rows="3" id="broadcastMsg" maxlength="160" oninput="document.getElementById('bcCount').textContent = this.value.length + '/160'" placeholder="URGENT: O- blood needed at City Hospital. Please open BloodBond to respond."></textarea>
+            <div style="text-align:right;font-size:0.7rem;color:var(--text-muted);font-family:var(--font-mono);margin-bottom:6px;" id="bcCount">0/160</div>
             <div class="broadcast-row">
-              <select class="form-control" id="broadcastTarget" style="flex:1;">
-                <option>All available donors (34)</option>
-                <option>O− donors only (2)</option>
-                <option>O+ donors only (12)</option>
-                <option>All O donors (14)</option>
-                <option>All city hospitals (8)</option>
-              </select>
+              <select class="form-control" id="broadcastTarget" style="flex:1;"></select>
               <button type="button" class="btn btn-primary" onclick="sendBroadcast()">🚨 Send Emergency Broadcast</button>
             </div>
           </div>
           <div style="margin-top:1rem;padding:10px 14px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius-sm);">
-            <p style="font-size:0.78rem;color:var(--orange);">⚠ This will send SMS to all selected donors via Twilio. Use only for genuine emergencies. All broadcasts are logged and audited.</p>
+            <p style="font-size:0.78rem;color:var(--orange);">⚠ This sends a real SMS to everyone in the selected group. Use only for genuine emergencies. Broadcasts are logged and audited, and only one can be sent per minute.</p>
           </div>
         </div>
 
@@ -259,46 +246,45 @@
 
   <div class="toast-container" id="toasts"></div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
   <script src="../JS/auth.js"></script>
   <script>
-    Auth.enforceRole('admin');
+    var roleOk = Auth.enforceRole('admin');
 
-    let donorsCache = [];
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const pretty = (bg) => String(bg || '').replace('-', '−');
+    const cap = (t) => String(t || '').charAt(0).toUpperCase() + String(t || '').slice(1);
 
-    function renderDonors(data) {
-      const tb = document.getElementById('donorTbody');
-      tb.innerHTML = data.map(d => `
-        <tr>
-          <td style="font-weight:600;">${d.full_name}</td>
-          <td><span class="badge badge-critical">${(d.blood_group||'').replace('-', '−')}</span></td>
-          <td style="color:var(--text-muted);">${d.area_text || ''}</td>
-          <td>${d.status==='available'?'<span class="badge badge-success">Available</span>':d.status==='locked'?'<span class="badge badge-urgent">56d Lock</span>':'<span class="badge badge-muted">Offline</span>'}</td>
-          <td style="color:var(--text-muted);font-family:var(--font-mono);font-size:0.75rem;">${d.last_donation_date || '—'}</td>
-          <td style="display:flex;gap:6px;">
-            <button type="button" class="action-btn verify" onclick="verifyDonor('${d.user_id}')">Verify</button>
-            <button type="button" class="action-btn suspend" onclick="suspendDonor('${d.user_id}')">Suspend</button>
-          </td>
-        </tr>`).join('');
+    // Server timestamps may have no timezone (SQLite) - treat those as UTC, not local time.
+    function utc(iso) { return new Date(/Z$|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z').getTime(); }
+    function fmtAgo(iso) {
+      if (!iso) return '—';
+      const s = Math.max(0, Math.floor((Date.now() - utc(iso)) / 1000));
+      if (s < 60) return s + 's ago';
+      const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+      const h = Math.floor(m / 60); if (h < 48) return h + 'h ago';
+      return Math.floor(h / 24) + 'd ago';
     }
+    function urgencyBadge(u) {
+      const v = (u || '').toLowerCase();
+      if (v === 'critical') return '<span class="badge badge-critical">CRITICAL</span>';
+      if (v === 'urgent') return '<span class="badge badge-urgent">URGENT</span>';
+      return '<span class="badge badge-normal">NORMAL</span>';
+    }
+    function hospName(req) { return esc(req.hospital_facility_name || ('Hospital ' + String(req.hospital_user_id || '').slice(0, 6))); }
+    function toast(msg, type = 'success') {
+      const t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = msg;
+      document.getElementById('toasts').appendChild(t); setTimeout(() => t.remove(), 4500);
+    }
+    function logout() { Auth.clearSession(); window.location.href = 'login.html'; }
 
-    function filterDonors(q) {
-      renderDonors(donorsCache.filter(d => (d.full_name||'').toLowerCase().includes(q.toLowerCase()) || (d.blood_group||'').toLowerCase().includes(q.toLowerCase())));
-    }
-    function filterBlood(bg) {
-      renderDonors(bg ? donorsCache.filter(d => d.blood_group === bg || d.blood_group === bg.replace('−','-')) : donorsCache);
-    }
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('revealed'); obs.unobserve(e.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('[data-reveal]').forEach(el => obs.observe(el));
 
-    async function sendBroadcast() {
-      const msg = document.getElementById('broadcastMsg').value.trim();
-      if (!msg) { toast('Enter broadcast message', 'error'); return; }
-      const target = document.getElementById('broadcastTarget').value;
-      try {
-        const res = await Auth.apiFetch('/admin/broadcast', { method: 'POST', withAuth: true, body: { message: msg, target: target } });
-        toast(`📡 Broadcast queued to "${res.target}" (${res.recipients} recipients)`);
-      } catch (e) {
-        toast(e.message || 'Broadcast failed', 'error');
-      }
-    }
+    let donorsCache = [], hospCache = [], overview = null, mapData = null;
+    let adminMap = null, mapLayer = null, mapMode = 'markers', firstFit = true;
 
     function showSection(id) {
       document.querySelectorAll('.dash-section').forEach(s => s.classList.remove('active'));
@@ -306,119 +292,217 @@
       if (sec) sec.classList.add('active');
       document.querySelectorAll('.sidebar-item[data-section]').forEach(s => s.classList.remove('active'));
       document.querySelector('.sidebar-item[data-section="' + id + '"]')?.classList.add('active');
+      if (id === 'overview' && adminMap) setTimeout(() => adminMap.invalidateSize(), 60);
     }
 
-    function logout() {
-      Auth.clearSession();
-      window.location.href = 'login.html';
-    }
-
-    function toast(msg, type = 'success') {
-      const t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = msg;
-      document.getElementById('toasts').appendChild(t); setTimeout(() => t.remove(), 3500);
-    }
-
-    const obs = new IntersectionObserver(entries => {
-      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('revealed'); obs.unobserve(e.target); } });
-    }, { threshold: 0.1 });
-    document.querySelectorAll('[data-reveal]').forEach(el => obs.observe(el));
-
-    function fmtAgo(iso) {
-      if (!iso) return '—';
-      const d = new Date(iso);
-      const s = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
-      if (s < 60) return s + 's ago';
-      const m = Math.floor(s / 60);
-      if (m < 60) return m + 'm ago';
-      const h = Math.floor(m / 60);
-      if (h < 48) return h + 'h ago';
-      const days = Math.floor(h / 24);
-      return days + 'd ago';
-    }
-
-    function urgencyBadge(u) {
-      const v = (u || '').toLowerCase();
-      if (v === 'critical') return '<span class="badge badge-critical">CRITICAL</span>';
-      if (v === 'urgent') return '<span class="badge badge-urgent">URGENT</span>';
-      return '<span class="badge badge-normal">NORMAL</span>';
-    }
-
-    function hospName(req) {
-      return req.hospital_facility_name || ('Hospital ' + String(req.hospital_user_id || '').slice(0, 6));
-    }
-
+    /* ---------------- requests ---------------- */
     function renderCityReqRow(req) {
       return `
         <div class="live-req-row">
-          <div class="blood-pill" style="width:40px;height:40px;">${(req.blood_group||'').replace('-', '−')}</div>
-          <div class="lrr-body"><div class="lrr-title">${hospName(req)} · ${(req.urgency||'').charAt(0).toUpperCase()+String(req.urgency||'').slice(1)} · ${req.units} unit(s)</div><div class="lrr-meta">${req.hospital_city || ''} · ${fmtAgo(req.created_at)} · Status: ${req.status}</div></div>
+          <div class="blood-pill" style="width:40px;height:40px;">${esc(pretty(req.blood_group))}</div>
+          <div class="lrr-body"><div class="lrr-title">${hospName(req)} · ${esc(cap(req.urgency))} · ${req.units} unit(s)</div><div class="lrr-meta">${esc(req.hospital_city)} · ${fmtAgo(req.created_at)} · Status: ${esc(req.status)}</div></div>
           ${urgencyBadge(req.urgency)}
-        </div>
-      `;
+        </div>`;
     }
 
-    async function verifyDonor(userId) {
-      try {
-        await Auth.apiFetch(`/admin/donors/${userId}/verify`, { method: 'POST', withAuth: true });
-        toast('✓ Donor verified');
-      } catch (e) {
-        toast(e.message || 'Verify failed', 'error');
-      }
+    /* ---------------- donors ---------------- */
+    function donorStatus(d) {
+      if (d.status === 'available') return '<span class="badge badge-success">Available</span>';
+      if (d.status === 'locked') return '<span class="badge badge-urgent">56d Lock</span>';
+      if (d.status === 'suspended') return '<span class="badge badge-critical">Suspended</span>';
+      return '<span class="badge badge-muted">Offline</span>';
+    }
+    function renderDonors(list) {
+      const tb = document.getElementById('donorTbody');
+      if (!list.length) { tb.innerHTML = '<tr><td colspan="6" style="color:var(--text-muted);padding:16px;">No donors match.</td></tr>'; return; }
+      tb.innerHTML = list.map(d => `
+        <tr>
+          <td style="font-weight:600;">${esc(d.full_name)}${d.verified ? '<span class="vbadge" title="Verified">✓ Verified</span>' : ''}</td>
+          <td><span class="badge badge-critical">${esc(pretty(d.blood_group))}</span></td>
+          <td style="color:var(--text-muted);">${esc(d.area_text)}</td>
+          <td>${donorStatus(d)}</td>
+          <td style="color:var(--text-muted);font-family:var(--font-mono);font-size:0.75rem;">${esc(d.last_donation_date || '—')}</td>
+          <td style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" class="action-btn ${d.verified ? 'neutral' : 'verify'}" onclick="verifyDonor('${esc(d.user_id)}', ${!d.verified})">${d.verified ? 'Unverify' : 'Verify'}</button>
+            <button type="button" class="action-btn ${d.suspended ? 'neutral' : 'suspend'}" onclick="suspendDonor('${esc(d.user_id)}', ${!d.suspended})">${d.suspended ? 'Reinstate' : 'Suspend'}</button>
+          </td>
+        </tr>`).join('');
+    }
+    function applyDonorFilters() {
+      const q = document.getElementById('donorSearch').value.trim().toLowerCase();
+      const bg = document.getElementById('donorBlood').value.replace('−', '-');
+      renderDonors(donorsCache.filter(d =>
+        (!bg || d.blood_group === bg) &&
+        (!q || (d.full_name || '').toLowerCase().includes(q) || (d.area_text || '').toLowerCase().includes(q) || (d.blood_group || '').toLowerCase().includes(q))));
+    }
+    async function adminAction(path, okMsg, kind) {
+      try { await Auth.apiFetch(path, { method: 'POST', withAuth: true }); toast(okMsg, kind); await refreshAdminData(); }
+      catch (e) { toast(e.message || 'Action failed', 'error'); }
+    }
+    function verifyDonor(id, on) { return adminAction('/admin/donors/' + id + (on ? '/verify' : '/unverify'), on ? '✓ Donor verified' : 'Donor unverified'); }
+    function suspendDonor(id, on) {
+      if (on && !confirm('Suspend this donor? They will stop receiving alerts and cannot turn themselves back on.')) return;
+      return adminAction('/admin/donors/' + id + (on ? '/suspend' : '/unsuspend'), on ? 'Donor suspended' : 'Donor reinstated', on ? 'error' : 'success');
     }
 
-    async function suspendDonor(userId) {
-      try {
-        await Auth.apiFetch(`/admin/donors/${userId}/suspend`, { method: 'POST', withAuth: true });
-        toast('Donor suspended', 'error');
-        await refreshAdminData();
-      } catch (e) {
-        toast(e.message || 'Suspend failed', 'error');
-      }
+    /* ---------------- hospitals ---------------- */
+    function renderHospitals(list) {
+      const tb = document.getElementById('hospTbody');
+      if (!list.length) { tb.innerHTML = '<tr><td colspan="7" style="color:var(--text-muted);padding:16px;">No hospitals have registered yet.</td></tr>'; return; }
+      tb.innerHTML = list.map(h => `
+        <tr>
+          <td style="font-weight:600;">${esc(h.facility_name)}</td>
+          <td style="color:var(--text-muted);">${esc(h.facility_type || '—')}</td>
+          <td style="color:var(--text-muted);">${esc(h.city)}</td>
+          <td style="color:var(--text-muted);">${esc(h.contact_person)}</td>
+          <td style="font-family:var(--font-mono);font-size:0.78rem;">${esc(h.phone)}</td>
+          <td>${h.verified ? '<span class="badge badge-success">Verified</span>' : '<span class="badge badge-urgent">Pending</span>'}</td>
+          <td><button type="button" class="action-btn ${h.verified ? 'neutral' : 'verify'}" onclick="verifyHospital('${esc(h.user_id)}', ${!h.verified})">${h.verified ? 'Revoke' : 'Verify'}</button></td>
+        </tr>`).join('');
+      const pending = list.filter(h => !h.verified).length;
+      document.getElementById('hospSummary').textContent = list.length + ' registered · ' + pending + ' awaiting verification';
+      const badge = document.getElementById('pendingHosp');
+      badge.textContent = String(pending); badge.style.display = pending ? '' : 'none';
     }
+    function verifyHospital(id, on) { return adminAction('/admin/hospitals/' + id + (on ? '/verify' : '/unverify'), on ? '✓ Hospital verified' : 'Verification revoked'); }
 
-    function renderShortage(donors) {
+    /* ---------------- overview widgets ---------------- */
+    function renderShortage(ov) {
       const grid = document.querySelector('.shortage-grid');
-      if (!grid) return;
-      const groups = ['A+','A-','B+','B-','AB+','AB-','O+','O-'];
-      const counts = {};
-      groups.forEach(g => counts[g] = 0);
-      donors.filter(d => d.status === 'available').forEach(d => { if (counts[d.blood_group] != null) counts[d.blood_group]++; });
-      grid.innerHTML = groups.map(g => {
-        const n = counts[g] || 0;
+      if (!grid || !ov) return;
+      grid.innerHTML = Object.keys(ov.available_by_group).map(g => {
+        const n = ov.available_by_group[g] || 0;
         const cls = n <= 1 ? 'critical' : (n <= 3 ? 'low' : 'ok');
-        const pct = Math.min(100, n * 12);
-        return `<div class="shortage-card"><div class="shortage-blood">${g.replace('-', '−')}</div><div class="shortage-bar-wrap"><div class="shortage-bar ${cls}" style="width:${pct}%"></div></div><div class="shortage-count">${n} donor(s) available</div></div>`;
+        return `<div class="shortage-card"><div class="shortage-blood">${esc(pretty(g))}</div><div class="shortage-bar-wrap"><div class="shortage-bar ${cls}" style="width:${Math.min(100, n * 12)}%"></div></div><div class="shortage-count">${n <= 1 ? '⚠ ' : ''}${n} donor(s) available</div></div>`;
       }).join('');
     }
-
-    async function refreshAdminData() {
-      try {
-        const ov = await Auth.apiFetch('/admin/overview', { method: 'GET', withAuth: true });
-        // keep UI unchanged: update stat card values in-place if ids exist (optional)
-        const cityReqs = await Auth.apiFetch('/requests/city', { method: 'GET', withAuth: true });
-        const donors = await Auth.apiFetch('/admin/donors', { method: 'GET', withAuth: true });
-        donorsCache = donors || [];
-        renderDonors(donorsCache);
-        renderShortage(donorsCache);
-
-        const reqCard = document.querySelector('#section-requests .card');
-        if (reqCard) reqCard.innerHTML = (cityReqs || []).slice(0, 20).map(renderCityReqRow).join('') || '<div class="nearby-empty">No live requests.</div>';
-
-        // overview: update top stat numbers (best-effort)
-        const statVals = document.querySelectorAll('.stat-card .stat-card-val');
-        if (statVals && statVals.length >= 4) {
-          statVals[0].textContent = String(ov.total_donors);
-          statVals[1].textContent = String(ov.available_now);
-          statVals[2].textContent = String(ov.active_requests);
-          statVals[3].textContent = String(ov.fulfilled_today);
-        }
-      } catch (e) {
-        console.error(e);
-      }
+    function renderGlance(reqs, ov) {
+      const box = document.getElementById('glanceReqs');
+      box.innerHTML = reqs.length ? reqs.slice(0, 5).map(r => `
+        <div class="live-req-row">
+          <div class="blood-pill" style="width:38px;height:38px;font-size:0.9rem;">${esc(pretty(r.blood_group))}</div>
+          <div class="lrr-body"><div class="lrr-title">${hospName(r)} · ${esc(cap(r.urgency))}</div><div class="lrr-meta">${esc(r.hospital_city)} · ${fmtAgo(r.created_at)} · ${esc(cap(r.status))}</div></div>
+          ${urgencyBadge(r.urgency)}
+        </div>`).join('') : '<div class="nearby-empty">No requests yet.</div>';
+      const total = Math.max(1, ov.total_donors);
+      const rows = [['available_now', 'available', 'ok'], ['locked', 'in 56-day lock', 'low'], ['offline', 'offline', ''], ['suspended', 'suspended', 'critical']];
+      document.getElementById('glanceDonors').innerHTML = rows.map(([k, label, cls]) => `
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="flex:1;"><div class="shortage-bar-wrap"><div class="shortage-bar ${cls}" style="width:${Math.round(100 * (ov[k] || 0) / total)}%;${cls ? '' : 'background:var(--text-muted)'}"></div></div></div>
+          <span style="font-size:0.75rem;color:var(--text-muted);white-space:nowrap;">${ov[k] || 0} ${label}</span>
+        </div>`).join('');
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      refreshAdminData();
+    /* ---------------- broadcast ---------------- */
+    function audiences(ov) {
+      const g = (ov && ov.available_by_group) || {};
+      const n = (...gs) => gs.reduce((a, k) => a + (g[k] || 0), 0);
+      return [
+        { label: 'All available donors', n: ov ? ov.available_now : 0, body: { audience: 'all_available' } },
+        { label: 'O− donors only', n: n('O-'), body: { audience: 'blood_groups', blood_groups: ['O-'] } },
+        { label: 'O+ donors only', n: n('O+'), body: { audience: 'blood_groups', blood_groups: ['O+'] } },
+        { label: 'All O donors', n: n('O+', 'O-'), body: { audience: 'blood_groups', blood_groups: ['O+', 'O-'] } },
+        { label: 'All hospitals / blood banks', n: ov ? ov.hospitals_total : 0, body: { audience: 'all_hospitals' } },
+      ];
+    }
+    function renderAudience(ov) {
+      const sel = document.getElementById('broadcastTarget');
+      const keep = sel.selectedIndex;
+      sel.innerHTML = audiences(ov).map((a, i) => `<option value="${i}">${esc(a.label)} (${a.n})</option>`).join('');
+      if (keep >= 0) sel.selectedIndex = keep;
+    }
+    async function sendBroadcast() {
+      const msg = document.getElementById('broadcastMsg').value.trim();
+      if (!msg) { toast('Enter a broadcast message', 'error'); return; }
+      const a = audiences(overview)[Number(document.getElementById('broadcastTarget').value)];
+      if (!a) return;
+      if (!a.n) { toast('Nobody is eligible in this group right now.', 'error'); return; }
+      if (!confirm('Send this SMS to ' + a.n + ' recipient(s): ' + a.label + '?\n\n"' + msg + '"')) return;
+      try {
+        const res = await Auth.apiFetch('/admin/broadcast', { method: 'POST', withAuth: true, body: { message: msg, ...a.body } });
+        if (res.delivery === 'queued') toast('📡 Broadcast sent to ' + res.recipients + ' recipient(s)');
+        else toast('Nothing was sent: the SMS provider is not configured. ' + res.recipients + ' recipient(s) matched.', 'error');
+        document.getElementById('broadcastMsg').value = ''; document.getElementById('bcCount').textContent = '0/160';
+      } catch (e) { toast(e.message || 'Broadcast failed', 'error'); }
+    }
+
+    /* ---------------- map ---------------- */
+    function initAdminMap() {
+      adminMap = L.map('adminMap').setView([22.9734, 78.6569], 5);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(adminMap);
+      mapLayer = L.layerGroup().addTo(adminMap);
+    }
+    function setMapMode(m) {
+      mapMode = m;
+      [['markers', 'btnMarkers'], ['density', 'btnDensity']].forEach(([k, id]) => {
+        const b = document.getElementById(id); b.classList.toggle('on', k === m); b.setAttribute('aria-pressed', String(k === m));
+      });
+      renderMap();
+    }
+    function popup(title, sub, lat, lng) {
+      return '<div class="bb-pop"><b>' + esc(title) + '</b><small>' + esc(sub) + '</small><a href="https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lng + '" target="_blank" rel="noopener">Open in Google Maps</a></div>';
+    }
+    function renderMap() {
+      if (!adminMap || !mapData) return;
+      mapLayer.clearLayers();
+      const pts = [];
+      (mapData.hospitals || []).forEach(h => {
+        const icon = L.divIcon({ className: '', html: '<div class="bb-pin">🏥</div>', iconSize: [30, 30], iconAnchor: [15, 15] });
+        L.marker([h.lat, h.lng], { icon }).addTo(mapLayer).bindPopup(popup(h.name, [h.type, h.city, h.verified ? 'Verified ✓' : 'Pending verification'].filter(Boolean).join(' · '), h.lat, h.lng));
+        pts.push([h.lat, h.lng]);
+      });
+      const colors = { critical: '#c8102e', urgent: '#f59e0b', normal: '#3b82f6' };
+      (mapData.requests || []).forEach(r => {
+        if (r.lat == null) return;
+        const c = colors[r.urgency] || colors.normal;
+        const icon = L.divIcon({ className: '', html: '<div class="bb-pin bb-req" style="border-color:' + c + ';background:' + c + '">' + esc(pretty(r.blood_group)) + '</div>', iconSize: [30, 30], iconAnchor: [15, 15] });
+        L.marker([r.lat, r.lng], { icon, zIndexOffset: 1000 }).addTo(mapLayer).bindPopup(popup(pretty(r.blood_group) + ' · ' + r.units + ' unit(s) · ' + r.urgency, (r.hospital_name || '') + ' · ' + r.status, r.lat, r.lng));
+        pts.push([r.lat, r.lng]);
+      });
+      (mapData.donors || []).forEach(d => {
+        pts.push([d.lat, d.lng]);
+        if (mapMode === 'density') {
+          // fixed pixel size so the density stays visible at any zoom; overlapping discs get denser
+          if (d.available) L.circleMarker([d.lat, d.lng], { radius: 26, stroke: false, fillColor: '#1db954', fillOpacity: 0.16, interactive: false }).addTo(mapLayer);
+          return;
+        }
+        const color = d.available ? '#1db954' : '#5a6472';
+        L.circleMarker([d.lat, d.lng], { radius: 7, color, weight: 2, fillColor: color, fillOpacity: d.available ? 0.55 : 0.25 }).addTo(mapLayer)
+          .bindPopup(popup(d.label + ' · ' + pretty(d.blood_group), (d.available ? 'Available' : 'Unavailable') + (d.verified ? ' · Verified ✓' : ''), d.lat, d.lng));
+      });
+      const s = mapData.summary || {};
+      document.getElementById('mapCount').textContent = (s.donors_total || 0) + ' donors · ' + (mapData.hospitals || []).length + ' hospitals · ' + (mapData.requests || []).length + ' active requests';
+      if (firstFit && pts.length) { firstFit = false; adminMap.fitBounds(pts, { padding: [30, 30], maxZoom: 13 }); }
+    }
+
+    /* ---------------- data loading ---------------- */
+    async function refreshAdminData() {
+      try {
+        const [ov, cityReqs, donors, hospitals] = await Promise.all([
+          Auth.apiFetch('/admin/overview'), Auth.apiFetch('/requests/city'), Auth.apiFetch('/admin/donors'), Auth.apiFetch('/admin/hospitals')
+        ]);
+        overview = ov; donorsCache = donors || []; hospCache = hospitals || [];
+        const vals = document.querySelectorAll('.stat-card .stat-card-val');
+        if (vals.length >= 4) { vals[0].textContent = String(ov.total_donors); vals[1].textContent = String(ov.available_now); vals[2].textContent = String(ov.active_requests); vals[3].textContent = String(ov.fulfilled_today); }
+        document.getElementById('subDonors').textContent = ov.hospitals_total + ' hospitals · ' + ov.hospitals_verified + ' verified';
+        document.getElementById('donorSummary').textContent = ov.total_donors + ' total · ' + ov.available_now + ' available · ' + ov.suspended + ' suspended';
+        applyDonorFilters(); renderHospitals(hospCache); renderShortage(ov); renderGlance(cityReqs || [], ov); renderAudience(ov);
+        const reqCard = document.querySelector('#section-requests .card');
+        if (reqCard) reqCard.innerHTML = (cityReqs || []).slice(0, 30).map(renderCityReqRow).join('') || '<div class="nearby-empty">No live requests.</div>';
+      } catch (e) { console.error(e); toast(e.message || 'Could not load admin data', 'error'); }
+      try { mapData = await Auth.apiFetch('/map/data'); renderMap(); } catch (e) { console.error(e); }
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      if (!(await roleOk)) return;
+      try {
+        if (typeof L === 'undefined') throw new Error('Leaflet not loaded');
+        initAdminMap();
+      } catch (e) {
+        console.warn(e);
+        document.getElementById('adminMap').innerHTML = '<p style="padding:1rem;color:var(--text-muted);font-size:0.85rem;">The map could not be loaded (check your internet connection). Everything else still works.</p>';
+      }
+      await refreshAdminData();
       setInterval(refreshAdminData, 15000);
     });
   </script>

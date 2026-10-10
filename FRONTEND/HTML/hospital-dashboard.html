@@ -112,6 +112,8 @@
 
     .dash-section { display: none; }
     .dash-section.active { display: block; }
+      .sect-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 1rem; }
+    .sect-head h3 { font-size: 1.05rem; font-weight: 700; color: var(--text); }
   </style>
 </head>
 <body>
@@ -161,8 +163,8 @@
       <div class="form-group">
         <label class="form-label">Location</label>
         <div style="display:flex;gap:8px;">
-          <input type="text" class="form-control" id="reqLoc" value="Kamla Raja Hospital, Lashkar" style="flex:1;" aria-label="Pickup or hospital location" />
-          <button type="button" style="padding:0 14px;border-radius:var(--radius-sm);background:var(--ink-3);border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-size:0.78rem;" onclick="document.getElementById('reqLoc').value='Auto-detected: Lashkar, Gwalior'" aria-label="Use sample location">📍</button>
+          <input type="text" class="form-control" id="reqLoc" value="" oninput="reqCoords=null" style="flex:1;" aria-label="Pickup or hospital location" />
+          <button type="button" style="padding:0 14px;border-radius:var(--radius-sm);background:var(--ink-3);border:1px solid var(--border);color:var(--text-dim);cursor:pointer;font-size:0.78rem;" onclick="useMyLocation()" aria-label="Use my current location">📍</button>
         </div>
       </div>
 
@@ -212,23 +214,23 @@
         <div class="stats-row" data-reveal>
           <div class="stat-card">
             <div class="stat-card-label">Active Requests</div>
-            <div class="stat-card-val" id="activeCount">2</div>
+            <div class="stat-card-val" id="activeCount">0</div>
             <div class="stat-card-sub">Currently pending</div>
           </div>
           <div class="stat-card">
             <div class="stat-card-label">Fulfilled (30d)</div>
-            <div class="stat-card-val" style="color:var(--green);">14</div>
-            <div class="stat-card-sub">94% success rate</div>
+            <div class="stat-card-val" style="color:var(--green);" id="fulfilledCount">0</div>
+            <div class="stat-card-sub" id="fulfilledSub">Last 30 days</div>
           </div>
           <div class="stat-card">
             <div class="stat-card-label">Avg Match Time</div>
-            <div class="stat-card-val">4.2<span style="font-size:1rem;">m</span></div>
-            <div class="stat-card-sub">Last 30 days</div>
+            <div class="stat-card-val" id="avgMatch">—</div>
+            <div class="stat-card-sub">Time until a donor accepts</div>
           </div>
           <div class="stat-card">
             <div class="stat-card-label">Donors Nearby</div>
-            <div class="stat-card-val">23</div>
-            <div class="stat-card-sub">Within 10 km</div>
+            <div class="stat-card-val" id="nearbyCount">—</div>
+            <div class="stat-card-sub" id="nearbySub">Within 10 km</div>
           </div>
         </div>
 
@@ -240,101 +242,7 @@
             <button type="button" class="btn btn-primary btn-sm" onclick="openModal()" aria-haspopup="dialog" aria-controls="reqModal">+ New Request</button>
           </div>
 
-          
-          <div class="card" style="margin-bottom:1.2rem;" data-reveal data-reveal-delay="1">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px;">
-              <div style="display:flex;align-items:center;gap:10px;">
-                <div class="blood-pill">O−</div>
-                <div>
-                  <div style="font-weight:700;font-size:0.95rem;color:var(--text);">2 units · O− Blood</div>
-                  <div style="font-size:0.75rem;color:var(--text-muted);">Submitted 2 mins ago · REQ-2024-001</div>
-                </div>
-              </div>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <span class="badge badge-critical">CRITICAL</span>
-                <button type="button" class="btn btn-ghost btn-sm" onclick="cancelReq(this)" style="color:var(--text-muted);">Cancel</button>
-              </div>
-            </div>
-
-            
-            <div class="status-track">
-              <div class="st-step"><div class="st-dot done">✓</div><div class="st-label">Submitted</div></div>
-              <div class="st-line"></div>
-              <div class="st-step"><div class="st-dot done">✓</div><div class="st-label">Matched</div></div>
-              <div class="st-line"></div>
-              <div class="st-step"><div class="st-dot active">•</div><div class="st-label">Alerted</div></div>
-              <div class="st-line"></div>
-              <div class="st-step"><div class="st-dot">4</div><div class="st-label">Confirmed</div></div>
-              <div class="st-line"></div>
-              <div class="st-step"><div class="st-dot">5</div><div class="st-label">Fulfilled</div></div>
-            </div>
-
-            <div class="divider"></div>
-
-            <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">Matched donors — 3 alerted simultaneously</div>
-            <div>
-              <div class="donor-match">
-                <div class="dm-avatar">RS</div>
-                <div class="dm-info">
-                  <div class="dm-name">Rahul S. <span class="badge badge-success" style="font-size:0.65rem;margin-left:4px;">O+</span></div>
-                  <div class="dm-meta">Lashkar · Last donated: 68 days ago · Verified ✓</div>
-                </div>
-                <div class="dm-dist">0.8 km</div>
-                <span class="badge badge-urgent">Alerted</span>
-              </div>
-              <div class="donor-match">
-                <div class="dm-avatar">PK</div>
-                <div class="dm-info">
-                  <div class="dm-name">Priya K. <span class="badge badge-success" style="font-size:0.65rem;margin-left:4px;">O−</span></div>
-                  <div class="dm-meta">Morar · Last donated: 90 days ago · Verified ✓</div>
-                </div>
-                <div class="dm-dist">1.4 km</div>
-                <span class="badge badge-urgent">Alerted</span>
-              </div>
-              <div class="donor-match">
-                <div class="dm-avatar">AV</div>
-                <div class="dm-info">
-                  <div class="dm-name">Amit V. <span class="badge badge-success" style="font-size:0.65rem;margin-left:4px;">O+</span></div>
-                  <div class="dm-meta">City Centre · Last donated: 120 days ago · Verified ✓</div>
-                </div>
-                <div class="dm-dist">2.1 km</div>
-                <span class="badge badge-muted">Pending</span>
-              </div>
-            </div>
-
-            <div style="margin-top:1rem;font-size:0.75rem;color:var(--text-muted);font-family:var(--font-mono);">
-              ⏱ Auto-escalate to next batch in <span id="escalateTimer" style="color:var(--orange);font-weight:600;">2:18</span>
-            </div>
-          </div>
-
-         
-          <div class="card" data-reveal data-reveal-delay="2">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:1rem;">
-              <div style="display:flex;align-items:center;gap:10px;">
-                <div class="blood-pill">B+</div>
-                <div>
-                  <div style="font-weight:700;font-size:0.95rem;color:var(--text);">1 unit · B+ Blood</div>
-                  <div style="font-size:0.75rem;color:var(--text-muted);">Submitted 10 mins ago · REQ-2024-002</div>
-                </div>
-              </div>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <span class="badge badge-normal">NORMAL</span>
-                <button type="button" class="btn btn-ghost btn-sm" style="color:var(--green);" onclick="fulfillReq(this)">Mark Fulfilled</button>
-                <button type="button" class="btn btn-ghost btn-sm" onclick="cancelReq(this)" style="color:var(--text-muted);">Cancel</button>
-              </div>
-            </div>
-            <div class="status-track">
-              <div class="st-step"><div class="st-dot done">✓</div><div class="st-label">Submitted</div></div>
-              <div class="st-line"></div>
-              <div class="st-step"><div class="st-dot active">•</div><div class="st-label">Matched</div></div>
-              <div class="st-line"></div>
-              <div class="st-step"><div class="st-dot">3</div><div class="st-label">Alerted</div></div>
-              <div class="st-line"></div>
-              <div class="st-step"><div class="st-dot">4</div><div class="st-label">Confirmed</div></div>
-              <div class="st-line"></div>
-              <div class="st-step"><div class="st-dot">5</div><div class="st-label">Fulfilled</div></div>
-            </div>
-          </div>
+          <div id="activeList"><div class="card"><p style="color:var(--text-muted);font-size:0.85rem;">Loading requests…</p></div></div>
         </div>
 
         
@@ -343,12 +251,7 @@
           <div class="card">
             <table class="hist-table">
               <thead><tr><th>Date</th><th>Blood</th><th>Units</th><th>Urgency</th><th>Time to Match</th><th>Status</th></tr></thead>
-              <tbody>
-                <tr><td>Apr 7</td><td><span class="badge badge-critical">A+</span></td><td>2</td><td><span class="badge badge-critical">Critical</span></td><td>3m 12s</td><td><span class="badge badge-success">Fulfilled</span></td></tr>
-                <tr><td>Apr 5</td><td><span class="badge badge-critical">O−</span></td><td>1</td><td><span class="badge badge-critical">Critical</span></td><td>4m 55s</td><td><span class="badge badge-success">Fulfilled</span></td></tr>
-                <tr><td>Apr 3</td><td><span class="badge badge-critical">B+</span></td><td>3</td><td><span class="badge badge-urgent">Urgent</span></td><td>7m 30s</td><td><span class="badge badge-success">Fulfilled</span></td></tr>
-                <tr><td>Apr 1</td><td><span class="badge badge-critical">AB−</span></td><td>1</td><td><span class="badge badge-critical">Critical</span></td><td>—</td><td><span class="badge badge-muted">Cancelled</span></td></tr>
-              </tbody>
+              <tbody id="historyTbody"><tr><td colspan="6" style="color:var(--text-muted);padding:16px;">No history yet.</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -359,7 +262,7 @@
           <a href="map.html" class="btn btn-primary" style="margin-bottom:1rem;display:inline-flex;">Open Full Map →</a>
           <div class="card" style="height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;">
             <div style="font-size:3rem;">🗺️</div>
-            <p style="color:var(--text-muted);font-size:0.85rem;">Google Maps integration — 23 donors pinned within 10 km</p>
+            <p style="color:var(--text-muted);font-size:0.85rem;" id="mapTeaser">Live donor map (OpenStreetMap)</p>
             <a href="map.html" style="font-size:0.8rem;color:var(--red-bright);">Open map view →</a>
           </div>
         </div>
@@ -372,13 +275,161 @@
 
   <script src="../JS/auth.js"></script>
   <script>
-    if (!Auth.requireRole('hospital')) {
-      throw new Error('Unauthorized role for hospital dashboard');
-    }
     
 
     let reqUnits = 1; let selUrgencyVal = ''; let selBloodVal = '';
     let lastCreatedRequestId = null;
+    let reqCoords = null;
+    let myProfile = null;
+    const ACTIVE_STATES = ['submitted', 'matched', 'alerted', 'accepted'];
+    const STEPS = ['Submitted', 'Matched', 'Alerted', 'Confirmed', 'Fulfilled'];
+    const STEP_OF = { submitted: 0, matched: 1, alerted: 2, accepted: 3, fulfilled: 4 };
+
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const pretty = (bg) => String(bg || '').replace('-', '−');
+    const cap = (t) => String(t || '').charAt(0).toUpperCase() + String(t || '').slice(1);
+    function ago(iso) {
+      if (!iso) return '';
+      const sec = Math.max(0, (Date.now() - new Date(iso.endsWith('Z') || /[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z').getTime()) / 1000);
+      if (sec < 60) return 'just now';
+      if (sec < 3600) return Math.floor(sec / 60) + ' min ago';
+      if (sec < 86400) return Math.floor(sec / 3600) + ' h ago';
+      return Math.floor(sec / 86400) + ' d ago';
+    }
+    function utc(iso) { return new Date(iso.endsWith('Z') || /[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z').getTime(); }
+    function urgencyBadge(u) { return '<span class="badge ' + (u === 'critical' ? 'badge-critical' : u === 'urgent' ? 'badge-urgent' : 'badge-normal') + '">' + esc(String(u).toUpperCase()) + '</span>'; }
+    function statusBadge(st) {
+      const cls = st === 'fulfilled' ? 'badge-success' : st === 'cancelled' ? 'badge-muted' : 'badge-urgent';
+      return '<span class="badge ' + cls + '">' + esc(cap(st)) + '</span>';
+    }
+
+    function trackHtml(status) {
+      const idx = STEP_OF[status] ?? 0;
+      return '<div class="status-track">' + STEPS.map((label, i) => {
+        const done = i < idx || status === 'fulfilled';
+        const cls = done ? 'done' : (i === idx ? 'active' : '');
+        const dot = done ? '✓' : (i === idx ? '•' : String(i + 1));
+        return (i ? '<div class="st-line"></div>' : '') + '<div class="st-step"><div class="st-dot ' + cls + '">' + dot + '</div><div class="st-label">' + label + '</div></div>';
+      }).join('') + '</div>';
+    }
+
+    function donorRows(r) {
+      if (!r.donors || !r.donors.length) {
+        return '<div style="font-size:0.8rem;color:var(--text-muted);">No compatible donors were found nearby yet. Use <b>Emergency escalate</b> to widen the search.</div>';
+      }
+      return '<div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.75rem;">Matched donors — ' + r.alerted_pending + ' waiting to respond</div>' +
+        r.donors.map((d) => {
+          const closed = r.status !== 'alerted' && r.status !== 'matched' && r.status !== 'submitted';
+          const badge = d.status === 'accepted' ? '<span class="badge badge-success">Accepted</span>'
+            : (closed && d.status !== 'declined') || (closed && r.status !== 'alerted') ? '<span class="badge badge-muted">Closed</span>'
+            : d.status === 'declined' ? '<span class="badge badge-muted">Declined</span>'
+            : d.status === 'alerted' ? '<span class="badge badge-urgent">Alerted</span>'
+            : '<span class="badge badge-muted">Queued</span>';
+          const initials = String(d.label).split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+          return '<div class="donor-match"><div class="dm-avatar">' + esc(initials) + '</div><div class="dm-info"><div class="dm-name">' + esc(d.label) +
+            ' <span class="badge badge-success" style="font-size:0.65rem;margin-left:4px;">' + esc(pretty(d.blood_group)) + '</span></div></div>' +
+            '<div class="dm-dist">' + (d.distance_km != null ? d.distance_km + ' km' : '—') + '</div>' + badge + '</div>';
+        }).join('');
+    }
+
+    function requestCard(r) {
+      const canFulfil = r.status === 'accepted';
+      const contact = r.accepted_donor
+        ? '<div style="margin:0.75rem 0;padding:10px 12px;border:1px solid rgba(29,185,84,0.4);border-radius:var(--radius-sm);background:rgba(29,185,84,0.08);font-size:0.85rem;">' +
+          '✅ <b>' + esc(r.accepted_donor.label) + '</b> (' + esc(pretty(r.accepted_donor.blood_group)) + ') confirmed — call <a href="tel:' + esc(r.accepted_donor.phone) + '">' + esc(r.accepted_donor.phone) + '</a></div>'
+        : '';
+      return '<div class="card" style="margin-bottom:1.2rem;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px;">' +
+          '<div style="display:flex;align-items:center;gap:10px;"><div class="blood-pill">' + esc(pretty(r.blood_group)) + '</div><div>' +
+            '<div style="font-weight:700;font-size:0.95rem;color:var(--text);">' + r.units + ' unit' + (r.units > 1 ? 's' : '') + ' · ' + esc(pretty(r.blood_group)) + ' Blood</div>' +
+            '<div style="font-size:0.75rem;color:var(--text-muted);">Submitted ' + esc(ago(r.created_at)) + ' · ' + esc(r.location_text) + '</div></div></div>' +
+          '<div style="display:flex;gap:8px;align-items:center;">' + urgencyBadge(r.urgency) +
+            (canFulfil ? '<button type="button" class="btn btn-ghost btn-sm" style="color:var(--green);" onclick="fulfillReq(\'' + r.id + '\')">Mark Fulfilled</button>' : '') +
+            '<button type="button" class="btn btn-ghost btn-sm" style="color:var(--text-muted);" onclick="cancelReq(\'' + r.id + '\')">Cancel</button></div>' +
+        '</div>' + trackHtml(r.status) + contact + '<div class="divider"></div>' + donorRows(r) + '</div>';
+    }
+
+    function renderHospital(reqs, summary) {
+      const active = reqs.filter((r) => ACTIVE_STATES.includes(r.status));
+      document.getElementById('activeList').innerHTML = active.length
+        ? active.map(requestCard).join('')
+        : '<div class="card"><p style="color:var(--text-muted);font-size:0.9rem;">No active requests. Use <b>+ New Request</b> to alert matching donors.</p></div>';
+      document.getElementById('activeCount').textContent = String(active.length);
+
+      const monthAgo = Date.now() - 30 * 86400000;
+      const done = reqs.filter((r) => r.status === 'fulfilled' && r.fulfilled_at && utc(r.fulfilled_at) >= monthAgo);
+      document.getElementById('fulfilledCount').textContent = String(done.length);
+      const closed = reqs.filter((r) => r.status === 'fulfilled' || r.status === 'cancelled').length;
+      document.getElementById('fulfilledSub').textContent = closed ? Math.round(100 * reqs.filter((r) => r.status === 'fulfilled').length / closed) + '% of closed requests' : 'Last 30 days';
+
+      const times = reqs.filter((r) => r.accepted_at && r.created_at).map((r) => (utc(r.accepted_at) - utc(r.created_at)) / 1000);
+      document.getElementById('avgMatch').innerHTML = times.length
+        ? (() => { const avg = times.reduce((a, b) => a + b, 0) / times.length; return avg < 90 ? Math.round(avg) + '<span style="font-size:1rem;">s</span>' : (avg / 60).toFixed(1) + '<span style="font-size:1rem;">m</span>'; })()
+        : '—';
+
+      if (summary) {
+        document.getElementById('nearbyCount').textContent = String(summary.donors_within_10km);
+        document.getElementById('nearbySub').textContent = 'Within 10 km · ' + summary.donors_available + ' available overall';
+        document.getElementById('mapTeaser').textContent = summary.donors_total + ' donors on the live map';
+      }
+
+      const hist = reqs.filter((r) => !ACTIVE_STATES.includes(r.status));
+      document.getElementById('historyTbody').innerHTML = hist.length ? hist.slice(0, 50).map((r) => {
+        const when = new Date(utc(r.created_at)).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const ttm = r.accepted_at ? Math.max(1, Math.round((utc(r.accepted_at) - utc(r.created_at)) / 1000)) : null;
+        return '<tr><td>' + esc(when) + '</td><td><span class="badge badge-critical">' + esc(pretty(r.blood_group)) + '</span></td><td>' + r.units + '</td><td>' + urgencyBadge(r.urgency) +
+          '</td><td>' + (ttm == null ? '—' : ttm < 90 ? ttm + 's' : Math.floor(ttm / 60) + 'm ' + (ttm % 60) + 's') + '</td><td>' + statusBadge(r.status) + '</td></tr>';
+      }).join('') : '<tr><td colspan="6" style="color:var(--text-muted);padding:16px;">No history yet.</td></tr>';
+    }
+
+    async function loadHospital() {
+      try {
+        const [reqs, map] = await Promise.all([
+          Auth.apiFetch('/requests/mine'),
+          Auth.apiFetch('/map/data').catch(() => null)
+        ]);
+        renderHospital(reqs || [], map && map.summary);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function initHospital() {
+      if (!(await Auth.enforceRole('hospital'))) return;
+      try {
+        const me = await Auth.apiFetch('/me');
+        myProfile = me.hospital_profile;
+        const loc = document.getElementById('reqLoc');
+        if (myProfile && !loc.value) loc.value = [myProfile.address, myProfile.city].filter(Boolean).join(', ');
+        if (!myProfile) toast('Finish your hospital profile to receive donor matches.', 'error');
+      } catch (_) {}
+      await loadHospital();
+      setInterval(loadHospital, 10000);
+    }
+
+    async function cancelReq(id) {
+      if (!confirm('Cancel this request? Donors will no longer be able to accept it.')) return;
+      try { await Auth.apiFetch('/requests/' + id + '/cancel', { method: 'POST' }); toast('Request cancelled'); loadHospital(); }
+      catch (e) { toast(String(e.message || e), 'error'); }
+    }
+
+    async function fulfillReq(id) {
+      try { await Auth.apiFetch('/requests/' + id + '/fulfill', { method: 'POST' }); toast('✓ Marked as fulfilled. Donor is locked for 56 days.'); loadHospital(); }
+      catch (e) { toast(String(e.message || e), 'error'); }
+    }
+
+    function useMyLocation() {
+      if (!navigator.geolocation) { toast('Geolocation is not available in this browser.', 'error'); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          reqCoords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+          document.getElementById('reqLoc').value = pos.coords.latitude.toFixed(5) + ', ' + pos.coords.longitude.toFixed(5);
+          toast('Location captured');
+        },
+        () => toast('Could not get your location. Check browser permissions.', 'error'),
+        { enableHighAccuracy: true, timeout: 15000 }
+      );
+    }
 
     function openModal() { document.getElementById('reqModal').classList.add('open'); }
     function closeModal() { document.getElementById('reqModal').classList.remove('open'); }
@@ -429,14 +480,14 @@
             blood_group: bg,
             units: reqUnits,
             urgency: selUrgencyVal,
-            location_text: loc
+            location_text: loc,
+            ...(reqCoords || {})
           }
         });
         lastCreatedRequestId = data.request && data.request.id ? data.request.id : null;
         closeModal();
         toast('Request submitted. Matched donors are being alerted.');
-        var n = parseInt(document.getElementById('activeCount').textContent, 10);
-        if (!isNaN(n)) document.getElementById('activeCount').textContent = String(n + 1);
+        loadHospital();
       } catch (e) {
         toast(String(e.message || e), 'error');
       }
@@ -458,7 +509,8 @@
             blood_group: bg,
             units: reqUnits,
             urgency: selUrgencyVal,
-            location_text: loc
+            location_text: loc,
+            ...(reqCoords || {})
           }
         });
         var requestId = createRes.request && createRes.request.id;
@@ -489,8 +541,7 @@
                 }
                 toast('Emergency escalation started.', 'success');
                 closeModal();
-                var ac = parseInt(document.getElementById('activeCount').textContent, 10);
-                if (!isNaN(ac)) document.getElementById('activeCount').textContent = String(ac + 1);
+                loadHospital();
                 resolve();
               } catch (err) {
                 toast(String(err.message || err), 'error');
@@ -512,18 +563,6 @@
       }
     }
 
-    function cancelReq(btn) {
-      const card = btn.closest('.card');
-      toast('Request cancelled — donors notified');
-      setTimeout(() => card.remove(), 500);
-    }
-
-    function fulfillReq(btn) {
-      const card = btn.closest('.card');
-      toast('✓ Marked as fulfilled! Donor locked for 56 days.');
-      card.style.borderColor = 'rgba(29,185,84,0.4)';
-    }
-
     function showSection(id) {
       document.querySelectorAll('.dash-section').forEach(s => s.classList.remove('active'));
       const sec = document.getElementById('section-' + id);
@@ -533,13 +572,7 @@
     }
 
     
-    let secs = 138;
-    setInterval(() => {
-      secs = Math.max(0, secs - 1);
-      const m = Math.floor(secs / 60), s = secs % 60;
-      const el = document.getElementById('escalateTimer');
-      if (el) el.textContent = m + ':' + String(s).padStart(2,'0');
-    }, 1000);
+    window.addEventListener('DOMContentLoaded', initHospital);
 
     function logout() { Auth.clearSession(); window.location.href = 'login.html'; }
 

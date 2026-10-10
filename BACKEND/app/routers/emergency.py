@@ -1,12 +1,15 @@
+import asyncio
 import logging
-import time
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 
 from app.audit import write_audit_log
+from app.guards import ensure_hospital_may_request
+from app.notifications import notify_donors_alerted
 from app.database import SessionLocal, get_db
 from app.deps import get_current_user
 from app.matching import (
@@ -39,6 +42,7 @@ def trigger_emergency(
 ) -> EmergencyTriggerResponse:
     if user.role != UserRole.hospital:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Hospital role required")
+    ensure_hospital_may_request(db, user)
 
     req = db.query(BloodRequest).filter(BloodRequest.id == body.request_id).first()
     if req is None:
@@ -72,7 +76,7 @@ def trigger_emergency(
     return EmergencyTriggerResponse(started=True, radii=RADII)
 
 
-def run_emergency_escalation(
+async def run_emergency_escalation(
     *,
     request_id: uuid.UUID,
     actor_user_id: uuid.UUID,
@@ -80,12 +84,47 @@ def run_emergency_escalation(
     longitude: float,
     blood_group: str,
 ) -> None:
+    """Widen the search radius step by step.
+
+    Async on purpose: the waiting between steps is an `asyncio.sleep`, so it does not tie up a
+    worker thread or a database session for minutes (many simultaneous emergencies used to be
+    able to exhaust the thread pool and freeze every other endpoint).
+    """
+    for index, radius in enumerate(RADII):
+        should_stop = await run_in_threadpool(
+            _escalation_step,
+            request_id=request_id,
+            actor_user_id=actor_user_id,
+            latitude=latitude,
+            longitude=longitude,
+            blood_group=blood_group,
+            radius=radius,
+            first=index == 0,
+        )
+        if should_stop:
+            return
+        if radius != RADII[-1]:
+            await asyncio.sleep(WAIT_SECONDS)
+    await run_in_threadpool(_escalation_finish, request_id=request_id, actor_user_id=actor_user_id)
+
+
+def _escalation_step(
+    *,
+    request_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    latitude: float,
+    longitude: float,
+    blood_group: str,
+    radius: int,
+    first: bool,
+) -> bool:
+    """Alert donors inside one radius. Returns True when the escalation should stop."""
     db = SessionLocal()
     try:
         req = db.query(BloodRequest).filter(BloodRequest.id == request_id).first()
         if req is None:
-            return
-        if req.status in {RequestStatus.cancelled, RequestStatus.fulfilled}:
+            return True
+        if first and req.status in {RequestStatus.cancelled, RequestStatus.fulfilled}:
             write_audit_log(
                 db,
                 actor_user_id=actor_user_id,
@@ -94,58 +133,47 @@ def run_emergency_escalation(
                 target_id=str(request_id),
                 meta={"reason": f"request_status_{req.status.value}"},
             )
-            return
-
-        for radius in RADII:
-            db.refresh(req)
-            if req.status in {RequestStatus.accepted, RequestStatus.cancelled, RequestStatus.fulfilled}:
-                write_audit_log(
-                    db,
-                    actor_user_id=actor_user_id,
-                    action="emergency.stop",
-                    target_type="request",
-                    target_id=str(request_id),
-                    meta={"reason": f"request_status_{req.status.value}", "radius": radius},
-                )
-                return
-
-            candidates, unknown_distance_count = _find_eligible_donors(
-                db=db,
-                blood_group=blood_group,
-                center=(latitude, longitude),
-                radius_km=radius,
-            )
-            if unknown_distance_count:
-                log.info(
-                    "emergency.distance_unknown request_id=%s radius_km=%s donors=%s",
-                    request_id,
-                    radius,
-                    unknown_distance_count,
-                )
-            alerted_count = _create_alerts_for_radius(db=db, req=req, donors=candidates)
-            if alerted_count > 0 and req.status != RequestStatus.alerted:
-                req.status = RequestStatus.alerted
-                req.alerted_at = datetime.now(timezone.utc)
-                db.commit()
-
+            return True
+        if req.status in {RequestStatus.accepted, RequestStatus.cancelled, RequestStatus.fulfilled}:
             write_audit_log(
                 db,
                 actor_user_id=actor_user_id,
-                action="emergency.radius.alerted",
+                action="emergency.stop",
                 target_type="request",
                 target_id=str(request_id),
-                meta={
-                    "radius": radius,
-                    "count": alerted_count,
-                    "unknown_distance_count": unknown_distance_count,
-                },
+                meta={"reason": f"request_status_{req.status.value}", "radius": radius},
             )
+            return True
 
-            if radius != RADII[-1]:
-                time.sleep(WAIT_SECONDS)
+        candidates, unknown_distance_count = _find_eligible_donors(
+            db=db, blood_group=blood_group, center=(latitude, longitude), radius_km=radius
+        )
+        if unknown_distance_count:
+            log.info("emergency.distance_unknown request_id=%s radius_km=%s donors=%s", request_id, radius, unknown_distance_count)
+        new_ids = _create_alerts_for_radius(db=db, req=req, donors=candidates)
+        notify_donors_alerted(req.id, new_ids)
+        if new_ids and req.status != RequestStatus.alerted:
+            req.status = RequestStatus.alerted
+            req.alerted_at = datetime.now(timezone.utc)
+            db.commit()
+        write_audit_log(
+            db,
+            actor_user_id=actor_user_id,
+            action="emergency.radius.alerted",
+            target_type="request",
+            target_id=str(request_id),
+            meta={"radius": radius, "count": len(new_ids), "unknown_distance_count": unknown_distance_count},
+        )
+        return False
+    finally:
+        db.close()
 
-        db.refresh(req)
-        if req.status in {RequestStatus.accepted, RequestStatus.cancelled, RequestStatus.fulfilled}:
+
+def _escalation_finish(*, request_id: uuid.UUID, actor_user_id: uuid.UUID) -> None:
+    db = SessionLocal()
+    try:
+        req = db.query(BloodRequest).filter(BloodRequest.id == request_id).first()
+        if req is not None and req.status in {RequestStatus.accepted, RequestStatus.cancelled, RequestStatus.fulfilled}:
             write_audit_log(
                 db,
                 actor_user_id=actor_user_id,
@@ -155,7 +183,6 @@ def run_emergency_escalation(
                 meta={"reason": f"request_status_{req.status.value}", "after_radii": True},
             )
             return
-
         write_audit_log(
             db,
             actor_user_id=actor_user_id,
@@ -181,7 +208,10 @@ def _find_eligible_donors(
     in_radius: list[DonorProfile] = []
     unknown_distance: list[DonorProfile] = []
     for profile in eligible:
-        donor_geo = extract_lat_lng(profile.area_text)
+        if profile.latitude is not None and profile.longitude is not None:
+            donor_geo = (profile.latitude, profile.longitude)
+        else:
+            donor_geo = extract_lat_lng(profile.area_text)
         if donor_geo is None:
             unknown_distance.append(profile)
             continue
@@ -195,12 +225,12 @@ def _create_alerts_for_radius(
     db: Session,
     req: BloodRequest,
     donors: list[DonorProfile],
-) -> int:
+) -> list[uuid.UUID]:
     existing_ids = {
         row[0]
         for row in db.query(RequestAlert.donor_user_id).filter(RequestAlert.request_id == req.id).all()
     }
-    created = 0
+    created: list[uuid.UUID] = []
     for donor in donors:
         if donor.user_id in existing_ids:
             continue
@@ -212,7 +242,7 @@ def _create_alerts_for_radius(
             )
         )
         existing_ids.add(donor.user_id)
-        created += 1
+        created.append(donor.user_id)
     if created:
         db.commit()
     return created

@@ -310,9 +310,10 @@
 
   <script src="../JS/auth.js"></script>
   <script>
-    Auth.enforceRole('donor');
+    var roleOk = Auth.enforceRole('donor');
    
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', async () => {
+      if (!(await roleOk)) return;
       initDonorDashboard();
 
       
@@ -394,7 +395,7 @@
 
     function fmtAgo(iso) {
       if (!iso) return '—';
-      const d = new Date(iso);
+      const d = new Date(/Z$|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z');
       const s = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
       if (s < 60) return s + 's ago';
       const m = Math.floor(s / 60);
@@ -416,8 +417,9 @@
       return '<span class="badge badge-normal">NORMAL</span>';
     }
 
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     function hospName(req) {
-      return req.hospital_facility_name || ('Hospital ' + String(req.hospital_user_id || '').slice(0, 6));
+      return esc(req.hospital_facility_name || ('Hospital ' + String(req.hospital_user_id || '').slice(0, 6)));
     }
 
     function renderAlertCard(req) {
@@ -429,7 +431,7 @@
             <div class="alert-blood-big">${bloodSup(blood)}</div>
             <div class="alert-details">
               <div class="alert-hosp">🚨 ${String(req.urgency || '').toUpperCase()} — ${hospName(req)}</div>
-              <div class="alert-meta">${req.units} unit(s) needed · ${req.location_text || ''}</div>
+              <div class="alert-meta">${req.units} unit(s) needed · ${esc(req.location_text)}</div>
               <div style="margin-top:4px;">
                 ${urgencyBadge(req.urgency)}
                 <span style="font-size:0.72rem;color:var(--text-muted);margin-left:6px;font-family:var(--font-mono);">Alerted ${fmtAgo(req.alerted_at || req.created_at)}</span>
@@ -440,6 +442,7 @@
             <button type="button" class="btn-accept" onclick="acceptAlert('${req.id}')">✓ Accept</button>
             <button type="button" class="btn-decline" onclick="declineAlert('${req.id}')">✕ Decline</button>
           </div>
+          <p style="font-size:0.7rem;color:var(--text-muted);margin-top:8px;">🔒 If you accept, this hospital will see your name and phone number so they can call you. Declining shares nothing.</p>
         </div>
       `;
     }

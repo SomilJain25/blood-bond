@@ -99,6 +99,19 @@
     return true;
   }
 
+  // FastAPI sends `detail` as a string (HTTPException) or a list (422 validation errors).
+  function errorMessage(data, status) {
+    var d = data && data.detail;
+    if (typeof d === 'string') return d;
+    if (Array.isArray(d) && d.length) {
+      return d.map(function (e) {
+        var field = (e.loc || []).filter(function (p) { return p !== 'body'; }).join('.');
+        return (field ? field + ': ' : '') + (e.msg || 'invalid value');
+      }).join('; ');
+    }
+    return 'Request failed (' + status + ')';
+  }
+
   async function apiFetch(path, options) {
     options = options || {};
     var method = options.method || 'GET';
@@ -129,8 +142,11 @@
       data = await res.json();
     } catch (_) {}
     if (!res.ok) {
-      var msg = (data && data.detail) ? data.detail : 'Request failed';
-      throw new Error(msg);
+      if (res.status === 401 && withAuth && getToken()) {
+        clearSession();
+        window.location.href = 'login.html';
+      }
+      throw new Error(errorMessage(data, res.status));
     }
     return data;
   }
@@ -138,47 +154,6 @@
   async function post(path, payload, withAuth, options) {
     options = options || {};
     return apiFetch(path, { method: 'POST', body: payload || {}, withAuth: withAuth, timeoutMs: options.timeoutMs });
-  }
-
-  function createOfflineOtpChallenge(phone) {
-    var code = String(Math.floor(Math.random() * 1000000)).padStart(6, '0');
-    var expiresAt = Date.now() + (10 * 60 * 1000);
-    sessionStorage.setItem(OFFLINE_OTP_KEY, JSON.stringify({
-      phone: normalizePhone(phone),
-      code: code,
-      expiresAt: expiresAt
-    }));
-    return { code: code, expiresAt: expiresAt };
-  }
-
-  function verifyOfflineOtpChallenge(phone, code) {
-    var raw = sessionStorage.getItem(OFFLINE_OTP_KEY);
-    if (!raw) return false;
-    try {
-      var row = JSON.parse(raw);
-      if (!row || row.phone !== normalizePhone(phone)) return false;
-      if (Date.now() > Number(row.expiresAt || 0)) return false;
-      if (String(row.code || '') !== String(code || '')) return false;
-      sessionStorage.removeItem(OFFLINE_OTP_KEY);
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  function startOfflineSession(phone, role) {
-    var normalizedRole = String(role || '').trim();
-    var normalizedPhone = normalizePhone(phone);
-    var offlineUser = {
-      id: 'offline-' + normalizedPhone,
-      phone: normalizedPhone,
-      role: normalizedRole,
-      phone_verified: true,
-      offline_mode: true
-    };
-    saveSession('offline-token-' + Date.now(), offlineUser);
-    localStorage.setItem(OFFLINE_MODE_KEY, '1');
-    return offlineUser;
   }
 
   async function fetchMe(options) {
@@ -219,6 +194,21 @@
     }
   }
 
+  async function enforceAnyRole(allowedRoles) {
+    if (!getToken()) { window.location.href = 'login.html'; return false; }
+    try {
+      var me = await fetchMe();
+      var role = me && me.user ? me.user.role : '';
+      if (allowedRoles.indexOf(role) < 0) { window.location.href = roleHome(role); return false; }
+      return true;
+    } catch (err) {
+      if (err && err.code === 'NETWORK' && allowedRoles.indexOf(getRole()) >= 0) return true;
+      clearSession();
+      window.location.href = 'login.html';
+      return false;
+    }
+  }
+
   async function syncPendingProfile() {
     var raw = sessionStorage.getItem('bc_pending_profile');
     if (!raw) return { synced: false };
@@ -253,11 +243,9 @@
     apiFetch: apiFetch,
     fetchMe: fetchMe,
     enforceRole: enforceRole,
+    enforceAnyRole: enforceAnyRole,
     syncPendingProfile: syncPendingProfile,
     post: post,
-    isOfflineMode: isOfflineMode,
-    createOfflineOtpChallenge: createOfflineOtpChallenge,
-    verifyOfflineOtpChallenge: verifyOfflineOtpChallenge,
-    startOfflineSession: startOfflineSession
+    isOfflineMode: isOfflineMode
   };
 })(window);

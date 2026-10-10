@@ -203,7 +203,7 @@
         <h2 class="login-title">Welcome back</h2>
         <p class="login-hint">Enter your phone number to receive an OTP</p>
         <p class="login-hint" style="margin-top:-1.2rem;">
-          Offline OTP fallback is available if internet is unavailable or slow.
+          A one-time code will be sent to your phone.
         </p>
 
         
@@ -265,6 +265,7 @@
         <a href="role.html" class="btn btn-secondary btn-full" style="justify-content:center;">
           New user? Register here
         </a>
+        <p style="text-align:center;margin-top:1.25rem;font-size:0.75rem;"><a href="login.html?role=admin" style="color:var(--text-muted);">Admin sign in</a></p>
       </div>
     </div>
   </div>
@@ -284,6 +285,12 @@
     let currentPhone = '';
 
     function initMode() {
+      if (targetRole === 'admin') {
+        const t = document.querySelector('.login-title');
+        const h = document.querySelector('.login-hint');
+        if (t) t.textContent = 'Admin sign in';
+        if (h) h.textContent = 'Only phone numbers approved by the server can sign in as admin';
+      }
       if (!verifyMode) return;
       const savedPhone = sessionStorage.getItem('bc_pending_phone') || '';
       const title = document.querySelector('.login-title');
@@ -327,18 +334,7 @@
         startTimer();
         document.querySelector('.otp-input').focus();
       } catch (err) {
-        if (err && err.code === 'NETWORK') {
-          const offline = Auth.createOfflineOtpChallenge(phone);
-          currentPhone = phone;
-          document.getElementById('phoneInput').value = phone;
-          document.getElementById('phoneStep').style.display = 'none';
-          document.getElementById('otpStep').classList.add('visible');
-          toast('No/slow internet detected. Offline OTP mode enabled.', 'warning');
-          toast('Offline OTP: ' + offline.code);
-          startTimer();
-          document.querySelector('.otp-input').focus();
-          return;
-        }
+        if (err && err.code === 'NETWORK') { toast('Cannot reach the server. Check your connection and try again.', 'error'); return; }
         toast(err.message || 'Could not send OTP', 'error');
       } finally {
         btn.classList.remove('loading');
@@ -379,15 +375,7 @@
         document.querySelectorAll('.otp-input').forEach(i => { i.value = ''; i.classList.remove('filled'); });
         document.querySelector('.otp-input').focus();
       } catch (err) {
-        if (err && err.code === 'NETWORK') {
-          const offline = Auth.createOfflineOtpChallenge(phone);
-          toast('Still offline. New offline OTP generated.', 'warning');
-          toast('Offline OTP: ' + offline.code);
-          startTimer();
-          document.querySelectorAll('.otp-input').forEach(i => { i.value = ''; i.classList.remove('filled'); });
-          document.querySelector('.otp-input').focus();
-          return;
-        }
+        if (err && err.code === 'NETWORK') { toast('Cannot reach the server. Check your connection and try again.', 'error'); return; }
         toast(err.message || 'Could not resend OTP', 'error');
       }
     }
@@ -425,7 +413,12 @@
           role: roleToVerify
         }, false, { timeoutMs: 25000 });
         Auth.saveSession(data.access_token, data.user);
-        await Auth.syncPendingProfile();
+        try {
+          await Auth.syncPendingProfile();
+        } catch (syncErr) {
+          // Logged in but profile not saved: keep the pending profile so the user can retry.
+          toast('Signed in, but your profile could not be saved: ' + (syncErr.message || syncErr), 'error');
+        }
         // Don't bounce the user on slow internet after a successful verify.
         try { await Auth.fetchMe({ timeoutMs: 25000 }); } catch (_) {}
         clearInterval(timerInterval);
@@ -440,25 +433,7 @@
           window.location.href = Auth.roleHome((data.user && data.user.role) || roleToVerify);
         }, 800);
       } catch (err) {
-        if (err && err.code === 'NETWORK') {
-          const ok = Auth.verifyOfflineOtpChallenge(phone, digits);
-          if (!ok) {
-            toast('Offline OTP invalid or expired', 'error');
-            return;
-          }
-          const offlineUser = Auth.startOfflineSession(phone, roleToVerify);
-          clearInterval(timerInterval);
-          document.getElementById('verifiedCheck').classList.add('show');
-          toast('Verified in offline mode ✓', 'success');
-          toast('Limited mode: live server actions require internet.', 'warning');
-          localStorage.setItem('bc_verified_phone', 'true');
-          sessionStorage.removeItem('bc_pending_phone');
-          sessionStorage.removeItem('bc_pending_role');
-          setTimeout(() => {
-            window.location.href = Auth.roleHome((offlineUser && offlineUser.role) || roleToVerify);
-          }, 800);
-          return;
-        }
+        if (err && err.code === 'NETWORK') { toast('Cannot reach the server. Check your connection and try again.', 'error'); return; }
         toast(err.message || 'OTP verification failed', 'error');
       }
     }

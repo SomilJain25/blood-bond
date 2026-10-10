@@ -21,7 +21,7 @@
   els.forEach((el) => obs.observe(el));
 })();
 
-(function initStatCount() {
+function initStatCount() {
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const nodes = document.querySelectorAll('.hstat-val[data-count]');
   if (!nodes.length || reduceMotion) {
@@ -59,7 +59,37 @@
     { threshold: 0.25 }
   );
   nodes.forEach((el) => obs.observe(el));
-})();
+}
+
+// Real numbers from the API (aggregate counts only). If the API is unreachable the counters
+// simply stay at 0 / "—" instead of showing made-up figures.
+async function loadPublicStats() {
+  try {
+    const st = await Auth.apiFetch('/public/stats', { withAuth: false, timeoutMs: 8000 });
+    document.getElementById('statDonors').setAttribute('data-count', String(st.donors_total || 0));
+    document.getElementById('statHospitals').setAttribute('data-count', String(st.hospitals_total || 0));
+    const match = document.getElementById('statMatch');
+    const unit = document.getElementById('statMatchUnit');
+    if (st.avg_match_seconds == null) {
+      match.removeAttribute('data-count');
+      match.textContent = '—';
+      unit.textContent = '';
+    } else if (st.avg_match_seconds < 1) {
+      match.removeAttribute('data-count');
+      match.textContent = '<1';
+      unit.textContent = 'Second';
+    } else if (st.avg_match_seconds < 120) {
+      match.setAttribute('data-count', String(st.avg_match_seconds));
+      unit.textContent = 'Seconds';
+    } else {
+      match.setAttribute('data-count', String(Math.round(st.avg_match_seconds / 60)));
+      unit.textContent = 'Minutes';
+    }
+  } catch (_) {
+    /* leave the zero state */
+  }
+}
+loadPublicStats().finally(initStatCount);
 
 (function initNavAndCursor() {
   const nav = document.getElementById('nav');

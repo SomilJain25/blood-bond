@@ -18,6 +18,8 @@ class RequestCreate(BaseModel):
     location_text: str = Field(..., min_length=2, max_length=300)
     geofence_km: float | None = Field(None, gt=0, le=500)
     notes: str | None = Field(None, max_length=500)
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
 
     @field_validator("blood_group")
     @classmethod

@@ -21,3 +21,6 @@ BACKEND/*.db
 # Never commit bytecode caches
 **/__pycache__/
 **/*.pyc
+
+BACKEND/*.db-wal
+BACKEND/*.db-shm
