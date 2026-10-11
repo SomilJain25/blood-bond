@@ -8,7 +8,7 @@
   var OFFLINE_MODE_KEY = 'bc_offline_mode';
   var OFFLINE_OTP_KEY = 'bc_offline_otp';
   // Production default (Render). Can be overridden via ?api_base=...
-  var DEFAULT_API_BASE = 'https://https://blood-bond-40t7.onrender.com/v1';
+  var DEFAULT_API_BASE = 'https://blood-bond-40t7.onrender.com/v1';
 
   function applyApiBaseFromUrl() {
     try {
