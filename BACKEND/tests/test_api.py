@@ -378,3 +378,10 @@ def test_defaults_work_without_postgres():
     s = Settings(_env_file=None)
     assert s.database_url.startswith("sqlite")
     assert "http://localhost:3000" in s.cors_origin_list and "http://127.0.0.1:5500" in s.cors_origin_list
+
+
+def test_database_url_normalised_and_unreachable_db_explains_itself():
+    from app.database import normalize_database_url
+    assert normalize_database_url("postgres://u:p@h:5432/db") == "postgresql://u:p@h:5432/db"
+    assert normalize_database_url("  postgresql://u:p@h/db ") == "postgresql://u:p@h/db"
+    assert normalize_database_url("sqlite:///./x.db") == "sqlite:///./x.db"

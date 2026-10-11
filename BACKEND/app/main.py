@@ -21,8 +21,10 @@ async def lifespan(_: FastAPI):
     try:
         init_db()
     except OperationalError as exc:
+        reason = (str(getattr(exc, "orig", exc)).strip().splitlines() or ["unknown error"])[0]
         raise RuntimeError(
-            "Database unreachable. Check DATABASE_URL in BACKEND/.env. "
+            f"Database unreachable: {reason} -- "
+            "Check DATABASE_URL in BACKEND/.env (or the Render environment). "
             "For local development use DATABASE_URL=sqlite:///./bloodconnect.db "
             "(no server needed); for production use your PostgreSQL URL. "
             "See BACKEND/ENV_GUIDE.md."
