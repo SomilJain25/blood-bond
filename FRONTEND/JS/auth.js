@@ -164,7 +164,9 @@
         clearSession();
         window.location.href = 'login.html';
       }
-      throw new Error(errorMessage(data, res.status));
+      var httpErr = new Error(errorMessage(data, res.status));
+      httpErr.status = res.status;
+      throw httpErr;
     }
     return data;
   }

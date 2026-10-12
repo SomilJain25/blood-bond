@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.audit import write_audit_log
 from app.database import get_db
-from app.models.user import UserRole
+from app.models.user import User, UserRole
 from app.schemas.auth import OtpSendRequest, OtpSendResponse, OtpVerifyRequest, TokenResponse
 from app.schemas.user import UserPublic
 from app import sms
@@ -106,9 +106,34 @@ def verify_otp_route(
             target_id=phone,
             ip=ip,
             user_agent=ua,
-            meta={"role": body.role.value},
+            meta={"role": body.role.value if body.role else None},
         )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OTP")
+    existing = db.query(User).filter(User.phone == phone).first()
+    if existing is not None:
+        # Returning user: the account's own role decides, whatever the browser sent
+        # (a stale or mis-clicked role must never block a login).
+        existing.phone_verified = True
+        db.commit()
+        db.refresh(existing)
+        user = existing
+        token = create_access_token(settings, user)
+        write_audit_log(
+            db,
+            actor_user_id=user.id,
+            action="otp.verify.success",
+            target_type="user",
+            target_id=str(user.id),
+            ip=ip,
+            user_agent=ua,
+            meta={"role": user.role.value, "returning": True},
+        )
+        return TokenResponse(access_token=token, user=UserPublic.model_validate(user))
+    if body.role is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found for this number. Please register first.",
+        )
     if body.role == UserRole.admin and phone not in settings.admin_phone_set:
         write_audit_log(
             db,

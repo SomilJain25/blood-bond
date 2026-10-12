@@ -403,18 +403,12 @@
         sessionStorage.getItem('bc_pending_role') ||
         localStorage.getItem('bc_role');
 
-      if (!roleToVerify) {
-        toast('Please select your role before verification', 'error');
-        setTimeout(() => { window.location.href = 'role.html'; }, 600);
-        return;
-      }
+      // A role is only needed to create a NEW account; returning users keep the role they registered with.
+      const payload = { phone: phone, code: digits };
+      if (roleToVerify) payload.role = roleToVerify;
 
       try {
-        const data = await Auth.post('/auth/otp/verify', {
-          phone: phone,
-          code: digits,
-          role: roleToVerify
-        }, false, { timeoutMs: 25000 });
+        const data = await Auth.post('/auth/otp/verify', payload, false, { timeoutMs: 25000 });
         Auth.saveSession(data.access_token, data.user);
         try {
           await Auth.syncPendingProfile();
@@ -433,10 +427,15 @@
         sessionStorage.removeItem('bc_pending_role');
 
         setTimeout(() => {
-          window.location.href = Auth.roleHome((data.user && data.user.role) || roleToVerify);
+          window.location.href = Auth.roleHome((data.user && data.user.role) || roleToVerify || '');
         }, 800);
       } catch (err) {
         if (err && err.code === 'NETWORK') { toast(err.message, 'error'); return; }
+        if (err && err.status === 404) {
+          toast(err.message || 'No account found. Please register first.', 'error');
+          setTimeout(() => { window.location.href = 'role.html'; }, 1500);
+          return;
+        }
         toast(err.message || 'OTP verification failed', 'error');
       }
     }

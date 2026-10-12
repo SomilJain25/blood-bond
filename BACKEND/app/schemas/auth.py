@@ -23,7 +23,8 @@ class OtpSendResponse(BaseModel):
 class OtpVerifyRequest(BaseModel):
     phone: str = Field(..., min_length=10, max_length=15)
     code: str = Field(..., min_length=6, max_length=6)
-    role: UserRole
+    # Only used when this phone has no account yet. Existing accounts always keep their stored role.
+    role: UserRole | None = None
 
     @field_validator("phone", "code")
     @classmethod
