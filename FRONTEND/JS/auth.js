@@ -43,6 +43,19 @@
     return (stored || DEFAULT_API_BASE).replace(/\/+$/, '');
   }
 
+  // Free hosting sleeps when idle. Pinging /health as soon as a page opens starts the wake-up
+  // while the visitor is still reading or typing. Fire-and-forget; at most once every 4 minutes.
+  function wakeServer() {
+    try {
+      var last = Number(sessionStorage.getItem('bc_wake_at') || 0);
+      if (Date.now() - last < 4 * 60 * 1000) return;
+      sessionStorage.setItem('bc_wake_at', String(Date.now()));
+      var root = getApiBase().replace(/\/v1$/, '');
+      fetch(root + '/health', { mode: 'no-cors', cache: 'no-store' }).catch(function () {});
+    } catch (_) {}
+  }
+  wakeServer();
+
   function normalizePhone(raw) {
     return String(raw || '').replace(/\D/g, '').slice(-10);
   }
@@ -130,8 +143,13 @@
         signal: controller.signal
       });
     } catch (err) {
-      var netErr = new Error('Network unavailable or too slow. Please retry.');
+      var host = getApiBase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      var timedOut = err && err.name === 'AbortError';
+      var netErr = new Error(timedOut
+        ? 'The server (' + host + ') is taking too long to respond. If it was idle it may be starting up - wait a minute and try again.'
+        : 'Cannot reach the server (' + host + '). Check your internet connection. If that is fine, the API address in auth.js is wrong or the server does not allow this website (CORS_ORIGINS).');
       netErr.code = 'NETWORK';
+      netErr.timeout = timedOut;
       netErr.cause = err;
       throw netErr;
     } finally {
@@ -231,6 +249,7 @@
 
   global.Auth = {
     getApiBase: getApiBase,
+    wakeServer: wakeServer,
     getToken: getToken,
     getRole: getRole,
     isAuthenticated: isAuthenticated,

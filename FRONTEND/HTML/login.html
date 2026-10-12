@@ -322,7 +322,10 @@
 
       try {
         // Use a longer timeout to avoid false "offline OTP" on slow internet.
-        const data = await Auth.post('/auth/otp/send', { phone: phone }, false, { timeoutMs: 25000 });
+        const wakeHint = setTimeout(() => toast('The server is waking up - this can take up to a minute...'), 8000);
+        let data;
+        try { data = await Auth.post('/auth/otp/send', { phone: phone }, false, { timeoutMs: 60000 }); }
+        finally { clearTimeout(wakeHint); }
         currentPhone = phone;
         document.getElementById('phoneInput').value = phone;
         document.getElementById('phoneStep').style.display = 'none';
@@ -334,7 +337,7 @@
         startTimer();
         document.querySelector('.otp-input').focus();
       } catch (err) {
-        if (err && err.code === 'NETWORK') { toast('Cannot reach the server. Check your connection and try again.', 'error'); return; }
+        if (err && err.code === 'NETWORK') { toast(err.message, 'error'); return; }
         toast(err.message || 'Could not send OTP', 'error');
       } finally {
         btn.classList.remove('loading');
@@ -375,7 +378,7 @@
         document.querySelectorAll('.otp-input').forEach(i => { i.value = ''; i.classList.remove('filled'); });
         document.querySelector('.otp-input').focus();
       } catch (err) {
-        if (err && err.code === 'NETWORK') { toast('Cannot reach the server. Check your connection and try again.', 'error'); return; }
+        if (err && err.code === 'NETWORK') { toast(err.message, 'error'); return; }
         toast(err.message || 'Could not resend OTP', 'error');
       }
     }
@@ -433,7 +436,7 @@
           window.location.href = Auth.roleHome((data.user && data.user.role) || roleToVerify);
         }, 800);
       } catch (err) {
-        if (err && err.code === 'NETWORK') { toast('Cannot reach the server. Check your connection and try again.', 'error'); return; }
+        if (err && err.code === 'NETWORK') { toast(err.message, 'error'); return; }
         toast(err.message || 'OTP verification failed', 'error');
       }
     }
